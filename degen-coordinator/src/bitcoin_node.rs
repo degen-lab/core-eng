@@ -1,9 +1,9 @@
 use std::{io::Cursor, str::FromStr};
 
 use bitcoin::{
+    Address as BitcoinAddress,
     consensus::Encodable,
-    hashes::{hex::ToHex, sha256d::Hash},
-    Address as BitcoinAddress, Txid,
+    hashes::{hex::ToHex, sha256d::Hash}, Txid,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -32,6 +32,17 @@ pub enum Error {
     InvalidUTXO(String),
     #[error("Invalid transaction hash")]
     InvalidTxHash,
+}
+
+#[derive(Debug, Deserialize)]
+struct RpcErrorResponse {
+    error: RpcError,
+}
+
+#[derive(Debug, Deserialize)]
+struct RpcError {
+    code: i32,
+    message: String,
 }
 
 #[allow(non_snake_case)]
@@ -86,7 +97,7 @@ impl BitcoinNode for LocalhostBitcoinNode {
         let wallet_name: &str = "muffy.dat";
         let result = self.create_empty_wallet(wallet_name);
         if let Err(Error::RPCError(message)) = &result {
-            if !message.contains("Database already exists.") {
+            if !message.ends_with("Database already exists.") {
                 return result;
             }
             // If the database already exists, no problem. Just emit a warning.
@@ -95,7 +106,6 @@ impl BitcoinNode for LocalhostBitcoinNode {
             if !self.list_wallets()?.contains(&wallet_name.to_string()) {
                 self.load_wallet_helper(wallet_name)?;
             }
-
         }
         // Import the address
         self.import_address(address)?;
@@ -153,12 +163,12 @@ impl LocalhostBitcoinNode {
                 Ok(json_result)
             }
             Err(ureq::Error::Status(code, response)) => {
-                println!("Response {:#?}", &response);
-                // println!("JSON response {:#?}", &response.into_json()?);
-                // println!("JSON response {:#?}", &response.into_string()?);
-                Err(Error::RPCError(response.into_string().unwrap_or("Can t get the specific error post send-json".to_string())))
+                let rpc_response: RpcErrorResponse = serde_json::from_str(&response.into_string()?)
+                    .map_err(|e| Error::InvalidResponseJSON(e.to_string()))?;
+                println!("Response {:#?}", &rpc_response);
+                Err(Error::RPCError(rpc_response.error.message))
             }
-            Err(_) => {Err(Error::RPCError("Andrei".to_string()))}
+            Err(error) => { Err(Error::RPCError(error.to_string())) }
         }
         // TODO: degens - check whether this would output the right way or not - with TM code
         // why is this failing post request
@@ -203,7 +213,7 @@ impl LocalhostBitcoinNode {
                 "Wallet {} was not loaded cleanly: {}",
                 wallet.name, wallet.warning
             );
-        println!("wallet {:?}", &wallet);
+            println!("wallet {:?}", &wallet);
         }
         Ok(())
     }

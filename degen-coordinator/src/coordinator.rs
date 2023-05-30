@@ -327,9 +327,10 @@ impl TryFrom<Config> for StacksCoordinator {
         local_stacks_node.broadcast_transaction(&tx)?;
 
         let local_bitcoin_node = LocalhostBitcoinNode::new(config.bitcoin_node_rpc_url.clone());
-        // TODO: degens - uncomment when starting the node first time
-        // let loaded_wallets = local_bitcoin_node.list_wallets()?;
-        // local_bitcoin_node.unload_wallets(&loaded_wallets)?;
+        // TODO: degens - comment after running it once
+        let loaded_wallets = local_bitcoin_node.list_wallets()?;
+        local_bitcoin_node.unload_wallets(&loaded_wallets)?;
+
         local_bitcoin_node.load_wallet(bitcoin_wallet.address())?;
 
         let local_fee_wallet = WrapPegWallet {
