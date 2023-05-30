@@ -17,6 +17,7 @@ pub enum Error {
 pub enum Network {
     Mainnet,
     Testnet,
+    Devnet,
 }
 
 #[derive(serde::Deserialize)]

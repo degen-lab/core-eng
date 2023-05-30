@@ -282,6 +282,7 @@ impl TryFrom<Config> for StacksCoordinator {
         {
             Network::Mainnet => (TransactionVersion::Mainnet, bitcoin::Network::Bitcoin),
             Network::Testnet => (TransactionVersion::Testnet, bitcoin::Network::Testnet),
+            Network::Devnet => (TransactionVersion::Testnet, bitcoin::Network::Regtest),
         };
 
         // Create the frost coordinator and use it to generate the aggregate public key and corresponding bitcoin wallet address
@@ -295,13 +296,14 @@ impl TryFrom<Config> for StacksCoordinator {
             })?;
         frost_coordinator.run_distributed_key_generation()?;
         // This should not be run on startup unless required:
-        // 1. No aggregate public key stored in persitent storage anywhere
+        // 1. No aggregate public key stored in persistent storage anywhere
         // 2. no address already set in sbtc contract (get-bitcoin-wallet-address)
         // X This is getting the public key from the coordinator
         let pubkey = frost_coordinator.get_aggregate_public_key()?;
         let xonly_pubkey =
             PublicKey::from_slice(&pubkey.x().to_bytes()).map_err(Error::InvalidPublicKey)?;
-
+        debug!("the frost xonly_public key is {}", xonly_pubkey);
+        // TODO: degens - can create script based on the xonly_pubkey and burn_block_height
         let local_stacks_node = NodeClient::new(&config.stacks_node_rpc_url);
         // If a user has not specified a start block height, begin from the current burn block height by default
         let burn_block_height = local_stacks_node.burn_block_height()?;
@@ -319,11 +321,15 @@ impl TryFrom<Config> for StacksCoordinator {
 
         // Set the bitcoin address using the sbtc contract
         let nonce = local_stacks_node.next_nonce(stacks_wallet.address())?;
+        // TODO: degens - what do we do with this?
         let tx =
             stacks_wallet.build_set_btc_address_transaction(bitcoin_wallet.address(), nonce)?;
         local_stacks_node.broadcast_transaction(&tx)?;
 
         let local_bitcoin_node = LocalhostBitcoinNode::new(config.bitcoin_node_rpc_url.clone());
+        // TODO: degens - uncomment when starting the node first time
+        // let loaded_wallets = local_bitcoin_node.list_wallets()?;
+        // local_bitcoin_node.unload_wallets(&loaded_wallets)?;
         local_bitcoin_node.load_wallet(bitcoin_wallet.address())?;
 
         let local_fee_wallet = WrapPegWallet {

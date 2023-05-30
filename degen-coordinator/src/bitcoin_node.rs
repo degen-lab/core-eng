@@ -83,13 +83,19 @@ impl BitcoinNode for LocalhostBitcoinNode {
     }
 
     fn load_wallet(&self, address: &BitcoinAddress) -> Result<(), Error> {
-        let result = self.create_empty_wallet();
+        let wallet_name: &str = "muffy.dat";
+        let result = self.create_empty_wallet(wallet_name);
         if let Err(Error::RPCError(message)) = &result {
-            if !message.ends_with("Database already exists.\"") {
+            if !message.contains("Database already exists.") {
                 return result;
             }
             // If the database already exists, no problem. Just emit a warning.
             warn!(message);
+            // If wallet is not listed, load it
+            if !self.list_wallets()?.contains(&wallet_name.to_string()) {
+                self.load_wallet_helper(wallet_name)?;
+            }
+
         }
         // Import the address
         self.import_address(address)?;
@@ -125,7 +131,7 @@ impl LocalhostBitcoinNode {
         Self { bitcoind_api }
     }
 
-    /// Make the Bitcoin RPC method call with the corresponding paramenters
+    /// Make the Bitcoin RPC method call with the corresponding parameters
     fn call(
         &self,
         method: &str,
@@ -148,12 +154,15 @@ impl LocalhostBitcoinNode {
             }
             Err(ureq::Error::Status(code, response)) => {
                 println!("Response {:#?}", &response);
-                println!("JSON response {:#?}", &response.into_json()?);
-                println!("JSON response {:#?}", &response.into_string()?);
-                Err(Error::RPCError("Andrei".to_string()))
+                // println!("JSON response {:#?}", &response.into_json()?);
+                // println!("JSON response {:#?}", &response.into_string()?);
+                Err(Error::RPCError(response.into_string().unwrap_or("Can t get the specific error post send-json".to_string())))
             }
             Err(_) => {Err(Error::RPCError("Andrei".to_string()))}
         }
+        // TODO: degens - check whether this would output the right way or not - with TM code
+        // why is this failing post request
+
         // let response = ureq::post(&self.bitcoind_api)
         //     .send_json(json_rpc)
         //     .map_err(|e| Error::RPCError(e.to_string()))?;
@@ -165,13 +174,17 @@ impl LocalhostBitcoinNode {
         // Ok(json_result)
     }
 
-    fn create_empty_wallet(&self) -> Result<(), Error> {
-        let wallet_name = "";
+    fn create_empty_wallet(&self, wallet_name: &str) -> Result<(), Error> {
+        // TODO: degens - check if we want a legacy wallet or a normal one
+        // legacy wallet can't import taproot addresses
+        // normal wallet can't import addresses, but can import descriptors
+        let wallet_name = wallet_name; //"degen_wallet";
         let disable_private_keys = false;
-        let blank = true;
+        let blank = true; // how to have no HD seed
+        // TODO: degens - try to keep blank=true, change descriptors=true and import p2tr_address
         let passphrase = "";
         let avoid_reuse = false;
-        let descriptors = false;
+        let descriptors = false; // this makes it legacy
         let load_on_startup = true;
         let params = (
             wallet_name,
@@ -190,6 +203,7 @@ impl LocalhostBitcoinNode {
                 "Wallet {} was not loaded cleanly: {}",
                 wallet.name, wallet.warning
             );
+        println!("wallet {:?}", &wallet);
         }
         Ok(())
     }
@@ -202,6 +216,34 @@ impl LocalhostBitcoinNode {
         let p2sh = false;
         let params = (address, label, rescan, p2sh);
         self.call("importaddress", params)?;
+        Ok(())
+    }
+
+    pub fn list_wallets(&self) -> Result<Vec<String>, Error> {
+        debug!("Listing wallets...");
+        let wallets = serde_json::from_value::<Vec<String>>(self.call("listwallets", ())?)
+            .map_err(|e| Error::InvalidResponseJSON(e.to_string()))?;
+        Ok(wallets)
+    }
+
+    // we can call to get the wallets directly here, or a list of wallets
+    // we'll go with a list of wallets as it is more modular
+    // and we simply parse all of them there
+    pub fn unload_wallets(&self, wallets: &Vec<String>) -> Result<(), Error> {
+        debug!("Unloading wallets...");
+        for wallet_name in wallets {
+            let load_on_startup = false;
+            let params = (wallet_name.clone(), load_on_startup);
+            self.call("unloadwallet", params)?;
+        }
+        Ok(())
+    }
+
+    fn load_wallet_helper(&self, wallet_name: &str) -> Result<(), Error> {
+        debug!("Loading wallet {}...", wallet_name);
+        let load_on_startup = false;
+        let params = (wallet_name, load_on_startup);
+        self.call("loadwallet", params)?;
         Ok(())
     }
 

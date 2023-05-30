@@ -23,6 +23,8 @@ fn main() {
                     // Determine what action the caller wishes to perform
                     match cli.command {
                         Command::DegenRunOne => {
+                            // TODO: degens - use this for a new flow
+                            // - such as calling SC for a given case
                             info!("Running Coordinator in Degen Run One");
                             //TODO: set up coordination with the stacks node
                             if let Err(e) = coordinator.degen_run_one() {
