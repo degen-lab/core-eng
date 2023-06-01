@@ -4,14 +4,15 @@ use std::sync::{
     mpsc::{RecvError, Sender},
 };
 
-use bitcoin::{psbt::Prevouts, SchnorrSighashType, Script, secp256k1::{Error as Secp256k1Error, Secp256k1, All}, Transaction, TxOut, util::{
+use bitcoin::{psbt::Prevouts, SchnorrSig, SchnorrSighashType, Script, secp256k1::{Error as Secp256k1Error, Secp256k1, All}, Transaction, TxOut, util::{
     base58,
     sighash::{Error as SighashError, SighashCache},
-}, XOnlyPublicKey};
-use bitcoin::secp256k1::ffi::KeyPair;
+}, Witness, XOnlyPublicKey};
+use bitcoin::KeyPair;
+use bitcoin::schnorr::TapTweak;
 use bitcoin::secp256k1::Message;
 use bitcoin::util::sighash::ScriptPath;
-use bitcoin::util::taproot::TaprootSpendInfo;
+use bitcoin::util::taproot::{ControlBlock, LeafVersion, TaprootSpendInfo};
 use blockstack_lib::chainstate::stacks::TransactionVersion;
 use tracing::debug;
 use wsts::{bip340::SchnorrProof, common::Signature};
@@ -202,11 +203,30 @@ trait CoordinatorHelpers: Coordinator {
         Ok(())
     }
 
+    fn verify_p2tr_commitment(
+        secp: &Secp256k1<All>,
+        script: &Script,
+        key_pair_internal: &KeyPair,
+        tap_info: &TaprootSpendInfo,
+        actual_control: &ControlBlock,
+    ) {
+        let tweak_key_pair = key_pair_internal
+            .tap_tweak(&secp, tap_info.merkle_root())
+            .to_inner();
+        let (tweak_key_pair_public_key, _) = tweak_key_pair.x_only_public_key();
+        assert!(actual_control.verify_taproot_commitment(secp, tweak_key_pair_public_key, script));
+    }
+
+    // steps
+    // get utxos to fund it
+    // creates tx with them as input
+    // sign the tx
+    // broadcast tx using bitcoin-rpc
     fn fund_script(
         &self,
         secp: &Secp256k1<All>,
         // tx_ref: &Transaction, // not needed - getting it(them) inside
-        // prevouts: &Prevouts<TxOut>, // not needed - getting it(them) inside
+        prevouts: &Prevouts<TxOut>, // not needed - getting it(them) inside
         script: &Script,
         key_pair_user: &KeyPair,
         tap_info: &TaprootSpendInfo,
@@ -220,26 +240,49 @@ trait CoordinatorHelpers: Coordinator {
             .list_unspent(self.fee_wallet().bitcoin().address())?;
         let mut tx = self.fee_wallet().bitcoin()
             .create_tx_fund_script(amount, &address, utxos)?;
-        let secp = Secp256k1::new();
+
 
         // only 1 input
         for index in 0..tx.input.len() {
             let mut comp = SighashCache::new(&tx);
 
-            // let taproot_sighash = comp
-            //     .taproot_signature_hash(
-            //         index,
-            //         &Prevouts::All(&tx.output),
-            //         ScriptPath::with_defaults(script),
-            //         SchnorrSighashType::All
-            //     ).unwrap();
+            let taproot_sighash = comp
+                .taproot_script_spend_signature_hash(
+                    index,
+                    &Prevouts::All(&tx.output),
+                    // prevouts,
+                    ScriptPath::with_defaults(script),
+                    SchnorrSighashType::All
+                ).unwrap();
 
-            // let sig = secp.sign_schnorr(&Message::from_slice(&taproot_sighash).unwrap(), )
+            let sig = secp.sign_schnorr(&Message::from_slice(&taproot_sighash).unwrap(), key_pair_user);
 
+            let control_block = tap_info
+                .control_block(&(script.clone(), LeafVersion::TapScript))
+                .unwrap();
+
+            verify_p2tr_commitment(secp, script, key_pair_internal, tap_info, &control_block);
+
+            let schnorr_sig = SchnorrSig {
+                sig,
+                hash_ty: SchnorrSighashType::AllPlusAnyoneCanPay,
+            };
+
+            let wit = Witness::from_vec(vec![
+                schnorr_sig.to_vec(),
+                script.to_bytes(),
+                actual_control.serialize(),
+            ]);
+
+            tx.input[0].witness = wit;
+
+            // tx
         }
         Ok(())
 
     }
+
+
 
 
     // TODO: Degens - here signs the tx
