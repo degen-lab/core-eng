@@ -5,8 +5,9 @@ use bitcoin::{
     consensus::Encodable,
     hashes::{hex::ToHex, sha256d::Hash}, Txid,
 };
+use rusqlite::types::Type::Integer;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Number, Value};
 use tracing::{debug, warn};
 
 pub trait BitcoinNode {
@@ -46,7 +47,7 @@ struct RpcError {
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Default, PartialEq, Eq, Clone)]
 pub struct UTXO {
     pub txid: String,
     pub vout: u32,
@@ -255,6 +256,15 @@ impl LocalhostBitcoinNode {
         let params = (wallet_name, load_on_startup);
         self.call("loadwallet", params)?;
         Ok(())
+    }
+
+    pub fn get_blockcount(&self) -> Result<u64, Error> {
+        debug!("Getting block count...");
+        let result = self.call("getblockcount", ())?;
+        let worked = serde_json::from_value::<Number>(result)
+            .map_err(|e| Error::InvalidResponseJSON(e.to_string()))?
+            .as_u64().expect("block count not a number");
+        Ok(worked)
     }
 
     fn raw_to_utxo(raw: &Value) -> Result<UTXO, Error> {

@@ -1,40 +1,40 @@
-use bitcoin::{
-    psbt::Prevouts,
-    secp256k1::Error as Secp256k1Error,
-    util::{
-        base58,
-        sighash::{Error as SighashError, SighashCache},
-    },
-    SchnorrSighashType, XOnlyPublicKey,
-};
-use blockstack_lib::chainstate::stacks::TransactionVersion;
-use frost_coordinator::{coordinator::Error as FrostCoordinatorError, create_coordinator};
-use frost_signer::net::{Error as HttpNetError, HttpNetListen};
+use std::{thread, time};
 use std::sync::{
     mpsc,
     mpsc::{RecvError, Sender},
 };
-use std::{thread, time};
+
+use bitcoin::{psbt::Prevouts, SchnorrSighashType, Script, secp256k1::{Error as Secp256k1Error, Secp256k1, All}, Transaction, TxOut, util::{
+    base58,
+    sighash::{Error as SighashError, SighashCache},
+}, XOnlyPublicKey};
+use bitcoin::secp256k1::ffi::KeyPair;
+use bitcoin::secp256k1::Message;
+use bitcoin::util::sighash::ScriptPath;
+use bitcoin::util::taproot::TaprootSpendInfo;
+use blockstack_lib::chainstate::stacks::TransactionVersion;
 use tracing::debug;
 use wsts::{bip340::SchnorrProof, common::Signature};
 
-use crate::bitcoin_wallet::BitcoinWallet;
-use crate::config::{Config, Network};
-use crate::peg_wallet::{
-    BitcoinWallet as BitcoinWalletTrait, Error as PegWalletError, PegWallet,
-    StacksWallet as StacksWalletTrait, WrapPegWallet,
-};
-use crate::stacks_node::{self, Error as StacksNodeError};
-use crate::stacks_wallet::StacksWallet;
+use frost_coordinator::{coordinator::Error as FrostCoordinatorError, create_coordinator};
+use frost_signer::net::{Error as HttpNetError, HttpNetListen};
 
 // Traits in scope
 use crate::bitcoin_node::{
     BitcoinNode, BitcoinTransaction, Error as BitcoinNodeError, LocalhostBitcoinNode,
 };
+use crate::bitcoin_wallet::BitcoinWallet;
+use crate::config::{Config, Network};
 use crate::peg_queue::{
     Error as PegQueueError, PegQueue, SbtcOp, SqlitePegQueue, SqlitePegQueueError,
 };
+use crate::peg_wallet::{
+    BitcoinWallet as BitcoinWalletTrait, Error as PegWalletError, PegWallet,
+    StacksWallet as StacksWalletTrait, WrapPegWallet,
+};
+use crate::stacks_node::{self, Error as StacksNodeError};
 use crate::stacks_node::{client::NodeClient, StacksNode};
+use crate::stacks_wallet::StacksWallet;
 
 type FrostCoordinator = frost_coordinator::coordinator::Coordinator<HttpNetListen>;
 
@@ -70,7 +70,7 @@ pub enum Error {
     #[error("{0}")]
     ConfigError(String),
     #[error(
-        "Invalid generated aggregate public key. Frost coordinator/signers may be misconfigured."
+    "Invalid generated aggregate public key. Frost coordinator/signers may be misconfigured."
     )]
     InvalidPublicKey(#[from] Secp256k1Error),
     #[error("Error occured during signing: {0}")]
@@ -153,8 +153,8 @@ trait DegenCoordinator: Coordinator {
             .list_unspent(self.fee_wallet().bitcoin().address());
     }
 }
-impl<T: Coordinator> DegenCoordinator for T {}
 
+impl<T: Coordinator> DegenCoordinator for T {}
 
 
 // Private helper functions
@@ -197,11 +197,55 @@ trait CoordinatorHelpers: Coordinator {
         let fulfill_tx = self.fulfill_peg_out(&op)?;
 
         // Broadcast the resulting BTC transaction to the Bitcoin node
-        // self.bitcoin_node().broadcast_transaction(&fulfill_tx)?;
+        self.bitcoin_node().broadcast_transaction(&fulfill_tx)?;
         println!("Success on transaction");
         Ok(())
     }
 
+    fn fund_script(
+        &self,
+        secp: &Secp256k1<All>,
+        // tx_ref: &Transaction, // not needed - getting it(them) inside
+        // prevouts: &Prevouts<TxOut>, // not needed - getting it(them) inside
+        script: &Script,
+        key_pair_user: &KeyPair,
+        tap_info: &TaprootSpendInfo,
+        address: bitcoin::Address,
+        amount: u64,
+        key_pair_internal: &KeyPair, // just for verification - frost aggregated pubkey
+    ) -> Result<()> {
+        // Retreive the utxos
+        let utxos = self
+            .bitcoin_node()
+            .list_unspent(self.fee_wallet().bitcoin().address())?;
+        let mut tx = self.fee_wallet().bitcoin()
+            .create_tx_fund_script(amount, &address, utxos)?;
+        let secp = Secp256k1::new();
+
+        // only 1 input
+        for index in 0..tx.input.len() {
+            let mut comp = SighashCache::new(&tx);
+
+            // let taproot_sighash = comp
+            //     .taproot_signature_hash(
+            //         index,
+            //         &Prevouts::All(&tx.output),
+            //         ScriptPath::with_defaults(script),
+            //         SchnorrSighashType::All
+            //     ).unwrap();
+
+            // let sig = secp.sign_schnorr(&Message::from_slice(&taproot_sighash).unwrap(), )
+
+        }
+        Ok(())
+
+    }
+
+
+    // TODO: Degens - here signs the tx
+    // create one to sign by user -> send money to script
+    // create one to sign by one user - refund
+    // create one to sign by frost same flow
     fn fulfill_peg_out(&mut self, op: &stacks_node::PegOutRequestOp) -> Result<BitcoinTransaction> {
         // Retreive the utxos
         let utxos = self
@@ -237,7 +281,7 @@ trait CoordinatorHelpers: Coordinator {
                 schnorr_proof.to_bytes().as_ref(),
                 &[SchnorrSighashType::All as u8],
             ]
-            .concat();
+                .concat();
             let finalized_b58 = base58::encode_slice(&finalized);
             debug!("CALC SIG ({}) {}", finalized.len(), finalized_b58);
 
@@ -307,6 +351,7 @@ impl TryFrom<Config> for StacksCoordinator {
         let local_stacks_node = NodeClient::new(&config.stacks_node_rpc_url);
         // If a user has not specified a start block height, begin from the current burn block height by default
         let burn_block_height = local_stacks_node.burn_block_height()?;
+        println!("Bitcoin block height {}", burn_block_height);
         config.start_block_height = config.start_block_height.or(Some(burn_block_height));
 
         // Create the bitcoin and stacks wallets
@@ -317,7 +362,7 @@ impl TryFrom<Config> for StacksCoordinator {
             version,
             10,
         )
-        .map_err(|e| Error::ConfigError(e.to_string()))?;
+            .map_err(|e| Error::ConfigError(e.to_string()))?;
 
         // Set the bitcoin address using the sbtc contract
         let nonce = local_stacks_node.next_nonce(stacks_wallet.address())?;
@@ -330,6 +375,7 @@ impl TryFrom<Config> for StacksCoordinator {
         // TODO: degens - comment after running it once
         let loaded_wallets = local_bitcoin_node.list_wallets()?;
         local_bitcoin_node.unload_wallets(&loaded_wallets)?;
+
 
         local_bitcoin_node.load_wallet(bitcoin_wallet.address())?;
 
@@ -386,13 +432,14 @@ impl Coordinator for StacksCoordinator {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::Config;
-    use crate::coordinator::{CoordinatorHelpers, StacksCoordinator};
-    use crate::stacks_node::PegOutRequestOp;
     use bitcoin::consensus::Encodable;
     use blockstack_lib::burnchains::Txid;
     use blockstack_lib::chainstate::stacks::address::{PoxAddress, PoxAddressType20};
     use blockstack_lib::types::chainstate::BurnchainHeaderHash;
+
+    use crate::config::Config;
+    use crate::coordinator::{CoordinatorHelpers, StacksCoordinator};
+    use crate::stacks_node::PegOutRequestOp;
 
     #[ignore]
     #[test]
