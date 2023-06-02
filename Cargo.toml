@@ -12,7 +12,8 @@ members = [
     "yarpc",
     "first-build",
     "degen-coordinator",
-    "degen-signer"]
+    "degen-signer",
+]
 
 [workspace.dependencies]
 bs58 = "0.4"
