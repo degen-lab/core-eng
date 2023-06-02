@@ -2,6 +2,7 @@ use blockstack_lib::burnchains::Txid;
 use blockstack_lib::types::chainstate::BurnchainHeaderHash;
 
 use crate::stacks_node;
+use crate::bitcoin_node;
 use crate::stacks_node::Error as StacksNodeError;
 mod sqlite_peg_queue;
 
@@ -14,6 +15,39 @@ pub enum Error {
     #[error("Stacks Node Error: {0}")]
     StacksNodeError(#[from] StacksNodeError),
 }
+
+// pub trait FundQueue {
+//     fn sbtc_op(&self) -> Result<Option<DegenOp>, Error>;
+//     fn poll<N: bitcoin_node::BitcoinNode>(&self, bitcoin_node: &N) -> Result<(), Error>;
+//
+//     // TODO: degens - update this as needed
+//     fn acknowledge(&self, txid: &Txid, burn_header_hash: &BurnchainHeaderHash)
+//                    -> Result<(), Error>;
+// }
+
+// TODO: degens - to use replica with fundIn, fundOut, refund
+// #[derive(Debug, serde::Serialize, serde::Deserialize)]
+// pub enum DegenOp {
+//     FundIn(bitcoin_node::FundInOp),
+//     FundOutRequest(bitcoin_node::FundOutRequestOp),
+//     Refund(bitcoin_node::RefundOp),
+// }
+//
+// impl DegenOp {
+//     pub fn as_peg_in(&self) -> Option<&bitcoin_node::FundInOp> {
+//         match self {
+//             Self::FundIn(op) => Some(op),
+//             _ => None,
+//         }
+//     }
+//
+//     pub fn as_peg_out_request(&self) -> Option<&bitcoin_node::FundOutRequestOp> {
+//         match self {
+//             Self::FundOutRequest(op) => Some(op),
+//             _ => None,
+//         }
+//     }
+// }
 
 pub trait PegQueue {
     fn sbtc_op(&self) -> Result<Option<SbtcOp>, Error>;

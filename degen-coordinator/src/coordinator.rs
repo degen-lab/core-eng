@@ -4,16 +4,18 @@ use std::sync::{
     mpsc::{RecvError, Sender},
 };
 
-use bitcoin::{psbt::Prevouts, SchnorrSig, SchnorrSighashType, Script, secp256k1::{Error as Secp256k1Error, Secp256k1, All}, Transaction, TxOut, util::{
+use bitcoin::{Address, psbt::Prevouts, SchnorrSig, SchnorrSighashType, Script, secp256k1::{Error as Secp256k1Error, Secp256k1 as GenSecp256k1, All}, Transaction, TxOut, util::{
     base58,
     sighash::{Error as SighashError, SighashCache},
 }, Witness, XOnlyPublicKey};
 use bitcoin::KeyPair;
 use bitcoin::schnorr::TapTweak;
+use bitcoin::SchnorrSigError::Secp256k1;
 use bitcoin::secp256k1::Message;
 use bitcoin::util::sighash::ScriptPath;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TaprootSpendInfo};
 use blockstack_lib::chainstate::stacks::TransactionVersion;
+use blockstack_lib::util::secp256k1::Secp256k1PrivateKey;
 use tracing::debug;
 use wsts::{bip340::SchnorrProof, common::Signature};
 
@@ -27,6 +29,7 @@ use crate::bitcoin_node::{
 use crate::bitcoin_wallet::BitcoinWallet;
 use crate::config::{Config, Network};
 use crate::peg_queue::{
+    // Error as FundQueError, FundQueue, DegenOp,
     Error as PegQueueError, PegQueue, SbtcOp, SqlitePegQueue, SqlitePegQueueError,
 };
 use crate::peg_wallet::{
@@ -79,12 +82,14 @@ pub enum Error {
 }
 
 pub trait Coordinator: Sized {
+    // type DegenQueue: DegenQueue;
     type PegQueue: PegQueue;
     type FeeWallet: PegWallet;
     type StacksNode: StacksNode;
     type BitcoinNode: BitcoinNode;
 
     // Required methods
+    // fn degen_queue(&self) -> &Self::DegenQueue;
     fn peg_queue(&self) -> &Self::PegQueue;
     fn fee_wallet_mut(&mut self) -> &mut Self::FeeWallet;
     fn fee_wallet(&self) -> &Self::FeeWallet;
@@ -136,8 +141,24 @@ pub trait Coordinator: Sized {
         });
     }
 
+    // three operations
+    // 1 to script - fund in
+    // 2 to pox from script - fund out
+    // 3 to user from script (refund) - refund
+    // fn process_degen_queue(&mut self) -> Result<()> {
+    //     match self.degen_queue().sbtc_op()? {
+    //
+    //         Some(DegenOp::FundIn(op)) => self.fund_in(op),
+    //         Some(DegenOp::FundOutRequest(op)) => self.fund_out_request(op),
+    //         Some(DegenOp::Refund(op)) => self.refund(op),
+    //         None => Ok(()),
+    //
+    //     }
+    // }
+
     fn process_queue(&mut self) -> Result<()> {
         match self.peg_queue().sbtc_op()? {
+
             Some(SbtcOp::PegIn(op)) => self.peg_in(op),
             Some(SbtcOp::PegOutRequest(op)) => self.peg_out(op),
             None => Ok(()),
@@ -146,16 +167,16 @@ pub trait Coordinator: Sized {
 }
 
 // Degens helper functions
-trait DegenCoordinator: Coordinator {
-    fn create_transaction(&mut self) {
-        // Retreive the utxos
-        let utxos = self
-            .bitcoin_node()
-            .list_unspent(self.fee_wallet().bitcoin().address());
-    }
-}
+// trait DegenCoordinator: Coordinator {
+//     fn create_transaction(&mut self) {
+//         // Retreive the utxos
+//         let utxos = self
+//             .bitcoin_node()
+//             .list_unspent(self.fee_wallet().bitcoin().address());
+//     }
+// }
 
-impl<T: Coordinator> DegenCoordinator for T {}
+// impl<T: Coordinator> DegenCoordinator for T {}
 
 
 // Private helper functions
@@ -204,7 +225,8 @@ trait CoordinatorHelpers: Coordinator {
     }
 
     fn verify_p2tr_commitment(
-        secp: &Secp256k1<All>,
+        &self,
+        secp: &GenSecp256k1<All>,
         script: &Script,
         key_pair_internal: &KeyPair,
         tap_info: &TaprootSpendInfo,
@@ -217,32 +239,85 @@ trait CoordinatorHelpers: Coordinator {
         assert!(actual_control.verify_taproot_commitment(secp, tweak_key_pair_public_key, script));
     }
 
+    fn create_tx_signed_fund_script(
+        &self,
+        key_hex: &str,
+        secp: &GenSecp256k1<All>,
+        script: &Script,
+        spender_address: &bitcoin::Address,
+        amount: u64,
+        key_pair_user: &KeyPair
+    ) -> Result<Transaction>
+    {
+        let private_key = Secp256k1PrivateKey::from_hex(key_hex)
+            .expect("Failed to construct a valid private key");
+
+        // first get transactions from user as input
+        let utxos = self
+            .bitcoin_node()
+            .list_unspent(self.fee_wallet().bitcoin().address())?;
+
+        // then create tx with output  (script address) + change to user input
+        let mut tx = self.fee_wallet().bitcoin()
+            .create_tx_fund(amount, spender_address, utxos)?;
+
+
+        // then sign tx with key
+            // script pubkey
+        let script_script_pubkey = tx.output[0].clone();
+        let change_script_pubkey = tx.output[1].clone();
+        println!("script script pubkey: {:?}", &script_script_pubkey);
+        println!("script script pubkey: {:?}", &change_script_pubkey);
+
+
+        // for index in 0..tx.input.len() {
+        //     let mut comp = SighashCache::new(&tx);
+        //
+        //    // user key signature
+        //
+        //     let wit = Witness::from_vec(vec![
+        //         schnorr_sig.to_vec(),
+        //         script.to_bytes(),
+        //         actual_control.serialize(),
+        //     ]);
+        //
+        //     tx.input[index].witness.push(wit);
+        // }
+        Ok(tx)
+
+
+
+    }
+
+
+
     // steps
     // get utxos to fund it
     // creates tx with them as input
     // sign the tx
     // broadcast tx using bitcoin-rpc
-    fn fund_script(
+    fn create_tx_signed_refund_script(
         &self,
-        secp: &Secp256k1<All>,
+        secp: &GenSecp256k1<All>,
         // tx_ref: &Transaction, // not needed - getting it(them) inside
         prevouts: &Prevouts<TxOut>, // not needed - getting it(them) inside
         script: &Script,
         key_pair_user: &KeyPair,
         tap_info: &TaprootSpendInfo,
-        address: bitcoin::Address,
+        address: &bitcoin::Address, // script address
         amount: u64,
         key_pair_internal: &KeyPair, // just for verification - frost aggregated pubkey
-    ) -> Result<()> {
+    ) -> Result<Transaction> {
         // Retreive the utxos
         let utxos = self
             .bitcoin_node()
-            .list_unspent(self.fee_wallet().bitcoin().address())?;
+            .list_unspent(self.fee_wallet().bitcoin().address())?; // TODO: replace with script address
         let mut tx = self.fee_wallet().bitcoin()
-            .create_tx_fund_script(amount, &address, utxos)?;
+            .create_tx_fund(amount, address,utxos)?;
 
 
-        // only 1 input
+
+        // first try only 1 input
         for index in 0..tx.input.len() {
             let mut comp = SighashCache::new(&tx);
 
@@ -261,7 +336,7 @@ trait CoordinatorHelpers: Coordinator {
                 .control_block(&(script.clone(), LeafVersion::TapScript))
                 .unwrap();
 
-            verify_p2tr_commitment(secp, script, key_pair_internal, tap_info, &control_block);
+            self.verify_p2tr_commitment(secp, script, key_pair_internal, tap_info, &control_block);
 
             let schnorr_sig = SchnorrSig {
                 sig,
@@ -271,15 +346,12 @@ trait CoordinatorHelpers: Coordinator {
             let wit = Witness::from_vec(vec![
                 schnorr_sig.to_vec(),
                 script.to_bytes(),
-                actual_control.serialize(),
+                control_block.serialize(),
             ]);
 
-            tx.input[0].witness = wit;
-
-            // tx
+            tx.input[index].witness = wit;
         }
-        Ok(())
-
+        Ok(tx)
     }
 
 
@@ -364,6 +436,7 @@ impl StacksCoordinator {
 impl TryFrom<Config> for StacksCoordinator {
     type Error = Error;
     fn try_from(mut config: Config) -> Result<Self> {
+        let secp = GenSecp256k1::new();
         // Determine what network we are running on
         let (version, bitcoin_network) = match config.network.as_ref().unwrap_or(&Network::Mainnet)
         {
@@ -390,6 +463,7 @@ impl TryFrom<Config> for StacksCoordinator {
         let xonly_pubkey =
             PublicKey::from_slice(&pubkey.x().to_bytes()).map_err(Error::InvalidPublicKey)?;
         debug!("the frost xonly_public key is {}", xonly_pubkey);
+        println!("the frost xonly_public key is {}", xonly_pubkey);
         // TODO: degens - can create script based on the xonly_pubkey and burn_block_height
         let local_stacks_node = NodeClient::new(&config.stacks_node_rpc_url);
         // If a user has not specified a start block height, begin from the current burn block height by default
@@ -419,8 +493,16 @@ impl TryFrom<Config> for StacksCoordinator {
         let loaded_wallets = local_bitcoin_node.list_wallets()?;
         local_bitcoin_node.unload_wallets(&loaded_wallets)?;
 
+        // TODO: degens - update this after rewriting to DegenOps and funding-requests
+        // let tx = bitcoin_wallet.create_tx_singed_fund(
+        //     1000,
+        //     &Address::p2tr(&secp, xonly_pubkey, None, bitcoin_network),
+        //     "available_utxos"
+        // ).unwrap();
+        // println!("tx fund is: {:?}", &tx);
 
-        local_bitcoin_node.load_wallet(bitcoin_wallet.address())?;
+        // local_bitcoin_node.load_wallet(bitcoin_wallet.address())?;
+
 
         let local_fee_wallet = WrapPegWallet {
             bitcoin_wallet,
@@ -439,10 +521,16 @@ impl TryFrom<Config> for StacksCoordinator {
 }
 
 impl Coordinator for StacksCoordinator {
+    // type DegenQueue = SqlitePegQueue;// TODO: degens - update this
     type PegQueue = SqlitePegQueue;
     type FeeWallet = WrapPegWallet;
     type StacksNode = NodeClient;
     type BitcoinNode = LocalhostBitcoinNode;
+
+    // TODO: degens - update this
+    // fn degen_queue(&self) -> &Self::DegenQueue {
+    //     &self.local_peg_queue
+    // }
 
     fn peg_queue(&self) -> &Self::PegQueue {
         &self.local_peg_queue

@@ -131,10 +131,10 @@ pub trait BitcoinWallet {
     // }
     //
     //
-    fn create_tx_fund_script(
+    fn create_tx_fund(
         &self,
         amount: u64,
-        address: &bitcoin::Address,
+        spender_address: &bitcoin::Address,
         available_utxos: Vec<UTXO>,
     ) -> Result<Transaction, Error>;
     // fn fulfill_degen(

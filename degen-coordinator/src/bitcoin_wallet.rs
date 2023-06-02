@@ -132,10 +132,10 @@ impl BitcoinWalletTrait for BitcoinWallet {
     // }
     //
     //
-    fn create_tx_fund_script(
+    fn create_tx_fund(
         &self,
         amount: u64,
-        address: &bitcoin::Address,
+        spender_address: &Address,
         available_utxos: Vec<UTXO>,
     ) -> Result<Transaction, PegWalletError> {
         // Create an empty transaction
@@ -187,7 +187,14 @@ impl BitcoinWalletTrait for BitcoinWallet {
             "change_amount: {:?}, total_consumed: {:?}, amount: {:?}",
             change_amount, total_consumed, amount
         );
-        // TODO: what is this?
+        // getting back the extra amount spend to the script
+        let spend_output = bitcoin::TxOut {
+            value: amount,
+            script_pubkey: spender_address.script_pubkey()
+        };
+        tx.output.push(spend_output);
+
+        // getting back the extra amount spend to the script
         if change_amount >= DUST_UTXO_LIMIT {
             let secp = Secp256k1::verification_only();
             let script_pubkey = Script::new_v1_p2tr(&secp, self.public_key, None);
@@ -200,7 +207,7 @@ impl BitcoinWalletTrait for BitcoinWallet {
             // Instead of leaving that change to the BTC miner, we could / should bump the sortition fee
             debug!("Not enough change to clear dust limit. Not adding change address.");
         }
-        // If we have fulfillment_input, it would be the only utxo in utxos, and be the first
+        // If we have fulfillment_input, it would be the only utxo in utxos
         for utxo in utxos {
             let input = utxo_to_input(utxo)?;
             tx.input.push(input);
@@ -289,6 +296,7 @@ mod tests {
     use rand::Rng;
 
     use crate::bitcoin_node::UTXO;
+    use crate::config::Network;
     use crate::coordinator::PublicKey;
     use crate::peg_wallet::{BitcoinWallet as BitcoinWalletTrait, Error as PegWalletError};
     use crate::util::test::{build_peg_out_request_op, PRIVATE_KEY_HEX};
@@ -297,10 +305,18 @@ mod tests {
 
     /// Helper function to build a valid bitcoin wallet
     fn bitcoin_wallet() -> BitcoinWallet {
+        let network: Option<Network> = Some(Network::Mainnet);
         let public_key =
             PublicKey::from_str("cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115")
                 .expect("Failed to construct a valid public key for the bitcoin wallet");
-        BitcoinWallet::new(public_key, bitcoin::Network::Testnet)
+
+        let  bitcoin_network = match network.unwrap_or(Network::Mainnet)
+        {
+            Network::Mainnet => bitcoin::Network::Bitcoin,
+            Network::Testnet =>  bitcoin::Network::Testnet,
+            Network::Devnet =>  bitcoin::Network::Regtest,
+        };
+        BitcoinWallet::new(public_key, bitcoin_network)
     }
 
     /// Helper function for building a random txid (32 byte hex string)
@@ -378,7 +394,8 @@ mod tests {
         println!("address: {}", &wallet.address);
         let mut txouts = build_utxos(3);
         println!("txouts length: {:?}", txouts.len());
-        let btc_tx = wallet.create_tx_fund_script(amount, &wallet.address, txouts);
+        // can be tested directly from the script that it can use the utxos and spend through signature
+        let btc_tx = wallet.create_tx_fund(amount, &wallet.address, txouts);
         println!("btc tx: {:?}", btc_tx);
     }
 

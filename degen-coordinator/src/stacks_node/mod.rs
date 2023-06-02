@@ -29,12 +29,19 @@ pub enum Error {
 
 #[cfg_attr(test, mockall::automock)]
 pub trait StacksNode {
+    // fn get_fund_in_ops(&self, block_height: u64) -> Result<Vec<FundInOp>, Error>;
+    // fn get_fund_out_request_ops(&self, block_height: u64) -> Result<Vec<FundOutRequestOp>, Error>;
+    // fn get_refund_ops(&self, block_height: u64) -> Result<Vec<RefundOp>, Error>;
     fn get_peg_in_ops(&self, block_height: u64) -> Result<Vec<PegInOp>, Error>;
     fn get_peg_out_request_ops(&self, block_height: u64) -> Result<Vec<PegOutRequestOp>, Error>;
     fn burn_block_height(&self) -> Result<u64, Error>;
     fn next_nonce(&self, addr: &StacksAddress) -> Result<u64, Error>;
     fn broadcast_transaction(&self, tx: &StacksTransaction) -> Result<(), Error>;
 }
+
+// pub type FundInOp = burn_ops::FundInOp;
+// pub type FundOutRequestOp = burn_ops::FundOutRequestOp;
+// pub type RefundOp = burn_ops::RefundOp;
 
 pub type PegInOp = burn_ops::PegInOp;
 pub type PegOutRequestOp = burn_ops::PegOutRequestOp;

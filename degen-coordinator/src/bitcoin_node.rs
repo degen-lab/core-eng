@@ -260,11 +260,10 @@ impl LocalhostBitcoinNode {
 
     pub fn get_blockcount(&self) -> Result<u64, Error> {
         debug!("Getting block count...");
-        let result = self.call("getblockcount", ())?;
-        let worked = serde_json::from_value::<Number>(result)
+        let block_count = serde_json::from_value::<Number>(self.call("getblockcount", ())?)
             .map_err(|e| Error::InvalidResponseJSON(e.to_string()))?
             .as_u64().expect("block count not a number");
-        Ok(worked)
+        Ok(block_count)
     }
 
     fn raw_to_utxo(raw: &Value) -> Result<UTXO, Error> {

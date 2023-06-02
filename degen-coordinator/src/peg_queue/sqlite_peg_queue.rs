@@ -71,6 +71,15 @@ impl SqlitePegQueue {
         Ok(this)
     }
 
+    // TODO: degens - rewrite this
+    // fn poll_fund_in_ops<N: StacksNode>(
+    //     &self,
+    //     stacks_node: &N,
+    //     block_height: u64,
+    // ) -> Result<(), PegQueueError> {
+    //     match stacks_node.get_fund_in_ops
+    // }
+
     fn poll_peg_in_ops<N: StacksNode>(
         &self,
         stacks_node: &N,
