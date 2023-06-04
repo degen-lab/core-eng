@@ -45,6 +45,7 @@ impl Signer {
             // Retreive a message from coordinator
             let inbound = rx.recv()?; // blocking
             let outbounds = round.process(inbound.msg)?;
+            // Everything beneath is what this signer is passing along to the relay.
             for out in outbounds {
                 let msg = Message {
                     msg: out.clone(),
@@ -71,6 +72,12 @@ impl Signer {
                             msg.sign(&network_private_key).expect("").to_vec()
                         }
                         MessageTypes::SignShareResponse(msg) => {
+                            msg.sign(&network_private_key).expect("").to_vec()
+                        }
+                        MessageTypes::CreateFundingTx(msg) => {
+                            msg.sign(&network_private_key).expect("").to_vec()
+                        }
+                        MessageTypes::FundingTxDone(msg) => {
                             msg.sign(&network_private_key).expect("").to_vec()
                         }
                     },
@@ -237,6 +244,18 @@ fn verify_msg(
                 return false;
             }
         }
+        MessageTypes::CreateFundingTx(msg)=> {
+            if !msg.verify(&m.sig, coordinator_public_key) {
+                warn!("Received a CreateFundingTx message with an invalid signature.");
+                return false;
+            }
+        }
+        MessageTypes::FundingTxDone(msg)=> {
+            if !msg.verify(&m.sig, coordinator_public_key) {
+                warn!("Received a FundingTxDone message with an invalid signature.");
+                return false;
+            }
+        }
     }
     true
 }
@@ -323,12 +342,12 @@ mod test {
         assert!(verify_msg(
             &dkg_begin,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
         assert!(verify_msg(
             &dkg_private_begin,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         // Check with incorrect public key
@@ -368,13 +387,13 @@ mod test {
         assert!(verify_msg(
             &dkg_end,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         assert!(verify_msg(
             &dkg_public_end,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         //Let us sign with the wrong sec key...
@@ -389,13 +408,13 @@ mod test {
         assert!(!verify_msg(
             &dkg_end,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         assert!(!verify_msg(
             &dkg_public_end,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -421,12 +440,12 @@ mod test {
         assert!(!verify_msg(
             &dkg_end,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
         assert!(!verify_msg(
             &dkg_public_end,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -454,7 +473,7 @@ mod test {
         assert!(verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         // Let's sign with the wrong sec key...
@@ -465,7 +484,7 @@ mod test {
         assert!(!verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -490,7 +509,7 @@ mod test {
         assert!(!verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -512,7 +531,7 @@ mod test {
         assert!(verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         // Let us sign with the wrong sec key...
@@ -522,7 +541,7 @@ mod test {
         assert!(!verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -541,7 +560,7 @@ mod test {
         assert!(!verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -562,7 +581,7 @@ mod test {
         assert!(verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
         // Let's check with the wrong pub key
         assert!(!verify_msg(
@@ -593,7 +612,7 @@ mod test {
         assert!(verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         // Let's sign with the wrong sec key...
@@ -603,7 +622,7 @@ mod test {
         assert!(!verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -625,7 +644,7 @@ mod test {
         assert!(!verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -656,14 +675,14 @@ mod test {
         assert!(verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         // Let's check the wrong pub key...
         assert!(!verify_msg(
             &message,
             &config.signer_keys,
-            &config.signer_keys.key_ids.get(&1).unwrap()
+            &config.signer_keys.key_ids.get(&1).unwrap(),
         ));
     }
 
@@ -688,7 +707,7 @@ mod test {
         assert!(verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
 
         // Let's sign with the wrong sec key...
@@ -697,7 +716,7 @@ mod test {
         assert!(!verify_msg(
             &message,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 
@@ -718,7 +737,7 @@ mod test {
         assert!(!verify_msg(
             &sign_share_response,
             &config.signer_keys,
-            &config.coordinator_pub_key
+            &config.coordinator_pub_key,
         ));
     }
 }

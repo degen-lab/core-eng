@@ -7,7 +7,7 @@ use frost_signer::{
     net::{Error as HttpNetError, Message, NetListen},
     signing_round::{
         DkgBegin, DkgPublicShare, MessageTypes, NonceRequest, NonceResponse, Signable,
-        SignatureShareRequest,
+        SignatureShareRequest, CreateFundingTx,
     },
 };
 use hashbrown::HashSet;
@@ -52,12 +52,15 @@ pub enum Command {
 }
 
 pub struct Coordinator<Network: NetListen> {
-    id: u32, // Used for relay coordination
+    id: u32,
+    // Used for relay coordination
     current_dkg_id: u64,
     current_dkg_public_id: u64,
     current_sign_id: u64,
     current_sign_nonce_id: u64,
-    total_signers: u32, // Assuming the signers cover all id:s in {1, 2, ..., total_signers}
+    current_create_tx_id: u64,
+    total_signers: u32,
+    // Assuming the signers cover all id:s in {1, 2, ..., total_signers}
     total_keys: u32,
     threshold: u32,
     network: Network,
@@ -76,6 +79,7 @@ impl<Network: NetListen> Coordinator<Network> {
             current_dkg_public_id: 0,
             current_sign_id: 1,
             current_sign_nonce_id: 1,
+            current_create_tx_id: 0,
             total_signers: config.total_signers,
             total_keys: config.total_keys,
             threshold: config.keys_threshold,
@@ -90,8 +94,8 @@ impl<Network: NetListen> Coordinator<Network> {
 }
 
 impl<Network: NetListen> Coordinator<Network>
-where
-    Error: From<Network::Error>,
+    where
+        Error: From<Network::Error>,
 {
     pub fn run(&mut self, command: &Command) -> Result<(), Error> {
         match command {
@@ -125,6 +129,31 @@ where
         self.start_private_shares()?;
         self.wait_for_dkg_end()?;
         Ok(public_key)
+    }
+
+    pub fn run_degen_create_funding_txs(&mut self) -> Result<(), Error> {
+        self.current_create_tx_id = self.current_create_tx_id.wrapping_add(1);
+        self.start_create_funding_txs()?;
+        let something = self.wait_for_funding_txs()?;
+        Ok(())
+    }
+
+    fn start_create_funding_txs(&mut self) -> Result<(), Error> {
+        info!(
+            "Create funding txs number #{}.",
+            self.current_create_tx_id
+        );
+        let create_funding_tx = CreateFundingTx {
+            funding_tx_id: self.current_dkg_id
+        };
+
+        let create_funding_txs_message = Message {
+            sig: create_funding_tx.sign(&self.network_private_key).expect(""),
+            msg: MessageTypes::CreateFundingTx(create_funding_tx),
+        };
+
+        self.network.send_message(create_funding_txs_message)?;
+        Ok(())
     }
 
     fn start_public_shares(&mut self) -> Result<(), Error> {
@@ -463,6 +492,32 @@ where
             .with_max_interval(Duration::from_millis(128))
             .build();
         backoff::retry_notify(backoff_timer, get_next_message, notify).map_err(|_| Error::Timeout)
+    }
+
+    fn wait_for_funding_txs(&mut self) -> Result<Point, Error> {
+        let mut ids_to_await: HashSet<u32> = (1..=self.total_signers).collect();
+
+        info!(
+            "Funding Tx Round #{}: waiting for funding txs from signers {:?}",
+            self.current_create_tx_id, ids_to_await
+        );
+
+        loop {
+            if ids_to_await.is_empty() {
+                info!("We have all the input txs");
+            }
+
+            match self.wait_for_next_message()?.msg {
+                MessageTypes::FundingTxDone(funding_tx_done) => {
+                    ids_to_await.remove(&funding_tx_done.signer_id);
+                    info!(
+                        "Received round #{} from signer #{}. Waiting on {:?}. Message was {:?}",
+                        funding_tx_done.funding_tx_id, funding_tx_done.signer_id, ids_to_await, funding_tx_done.funding_tx_done
+                    );
+                }
+                _ => {}
+            }
+        }
     }
 }
 

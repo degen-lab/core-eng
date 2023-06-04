@@ -1,16 +1,18 @@
 [workspace]
 members = [
-  "relay-server",
-  "frost-test",
-  "frost-signer",
-  "frost-coordinator",
-  "stacks-coordinator",
-  "stacks-signer",
-  "stacks-doctor",
-  "test-utils",
-  "test-vectors",
-  "yarpc",
-  "first-build"]
+    "relay-server",
+    "frost-test",
+    "frost-signer",
+    "frost-coordinator",
+    "stacks-coordinator",
+    "stacks-signer",
+    "stacks-doctor",
+    "test-utils",
+    "test-vectors",
+    "yarpc",
+    "first-build",
+    "degen-coordinator",
+    "degen-signer"]
 
 [workspace.dependencies]
 bs58 = "0.4"

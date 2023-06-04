@@ -142,6 +142,9 @@ pub enum MessageTypes {
     NonceResponse(NonceResponse),
     SignShareRequest(SignatureShareRequest),
     SignShareResponse(SignatureShareResponse),
+    // Degen messages
+    CreateFundingTx(CreateFundingTx),
+    FundingTxDone(FundingTxDone),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -193,6 +196,36 @@ impl Signable for DkgBegin {
     fn hash(&self, hasher: &mut Sha256) {
         hasher.update("DKG_BEGIN".as_bytes());
         hasher.update(self.dkg_id.to_be_bytes());
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct CreateFundingTx {
+    pub funding_tx_id: u64, // QQ: Why do we need this?
+}
+
+impl Signable for CreateFundingTx {
+    fn hash(&self, hasher: &mut Sha256) {
+        hasher.update("CREATE_FUNDING_TX".as_bytes());
+        hasher.update(self.funding_tx_id.to_be_bytes());
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct FundingTxDone {
+    pub funding_tx_id: u64,
+    pub signer_id: u32,
+    // QQ: Keep in sync messages
+    // TODO Deployer whatever you like man
+    pub funding_tx_done: String,
+}
+
+impl Signable for FundingTxDone {
+    fn hash(&self, hasher: &mut Sha256) {
+        hasher.update("FUNDING_TX_DONE".as_bytes());
+        hasher.update(self.funding_tx_id.to_be_bytes());
+        hasher.update(self.signer_id.to_be_bytes());
+        hasher.update(self.funding_tx_done.as_bytes());
     }
 }
 
@@ -359,6 +392,9 @@ impl SigningRound {
             }
             MessageTypes::SignShareRequest(sign_share_request) => {
                 self.sign_share_request(sign_share_request)
+            }
+            MessageTypes::CreateFundingTx(create_funding_tx) => {
+                self.create_funding_tx(create_funding_tx)
             }
             MessageTypes::NonceRequest(nonce_request) => self.nonce_request(nonce_request),
             _ => Ok(vec![]), // TODO
@@ -698,6 +734,26 @@ impl SigningRound {
             shares_clone.keys(),
         );
         Ok(vec![])
+    }
+
+    fn create_funding_tx(&mut self, create_funding_tx: CreateFundingTx) -> Result<Vec<MessageTypes>, Error> {
+        let mut msgs = vec![];
+
+        info!(
+            "create funding tx #{} for signer #{}",
+            create_funding_tx.funding_tx_id,
+            self.signer.frost_signer.get_id(),
+        );
+
+        let funding_tx_done = FundingTxDone {
+            funding_tx_done: "Andrei is here have no fear".to_string(),
+            funding_tx_id: create_funding_tx.funding_tx_id,
+            signer_id: self.signer.signer_id,
+        };
+        let funding_tx_done_msg = MessageTypes::FundingTxDone(funding_tx_done);
+        msgs.push(funding_tx_done_msg);
+
+        Ok(msgs)
     }
 }
 
