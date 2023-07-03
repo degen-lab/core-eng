@@ -1,0 +1,9 @@
+sbtc_contract = "SP2BJA4JYFJ7SDMNFJZ9TJ3GB80P9Z80ADPGK1C2F.sbtc-alpha"
+stacks_private_key = ""
+stacks_node_rpc_url = "http://localhost:20443"
+bitcoin_node_rpc_url = "http://abcd:abcd@localhost:18445"
+frost_dkg_round_id = 0
+transaction_fee = 2000
+http_relay_url = "http://localhost:9776"
+frost_state_file = "frost.state.bin"
+network_private_key = "9aSCCR6eirt1NAHwJtSz4HMwBHTyMo62SyPMvVDt5DQn"
