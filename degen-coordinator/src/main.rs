@@ -1,14 +1,16 @@
 use clap::Parser;
 use frost_signer::logging;
-use stacks_coordinator::cli::{Cli, Command};
-use stacks_coordinator::config::Config;
-use stacks_coordinator::coordinator::{Coordinator, StacksCoordinator};
+use degen_coordinator::cli::{Cli, Command};
+use degen_coordinator::config::Config;
+use degen_coordinator::coordinator::{Coordinator, StacksCoordinator};
 use tracing::{error, info, warn};
 
 fn main() {
     let cli = Cli::parse();
 
-    logging::initiate_tracing_subscriber();
+
+    // Initialize logging
+    logging::initiate_tracing_subscriber().unwrap();
 
     //TODO: get configs from sBTC contract
     match Config::from_path(&cli.config) {
@@ -21,6 +23,13 @@ fn main() {
                 Ok(mut coordinator) => {
                     // Determine what action the caller wishes to perform
                     match cli.command {
+                      Command::DegenRunOne => {
+                            info!("Running Coordinator in Degen Run One");
+                            //TODO: set up coordination with the stacks node
+                            if let Err(e) = coordinator.degen_run_one() {
+                                error!("An error occurred running the coordinator: {}", e);
+                            }
+                        }
                         Command::Run => {
                             info!("Running Coordinator");
                             //TODO: set up coordination with the stacks node

@@ -1,18 +1,18 @@
 [workspace]
 members = [
-  "relay-server",
-  "frost-test",
-  "frost-signer",
-  "frost-coordinator",
-  "sbtc-cli",
-  "stacks-coordinator",
-  "stacks-signer",
-  "stacks-signer-api",
-  "stacks-doctor",
-  "test-utils",
-  "test-vectors",
-  "yarpc",
-  "first-build"]
+    "relay-server",
+    "frost-test",
+    "frost-signer",
+    "frost-coordinator",
+    "stacks-coordinator",
+    "stacks-signer",
+    "stacks-doctor",
+    "test-utils",
+    "test-vectors",
+    "yarpc",
+    "degen-coordinator",
+    "degen-signer"
+]
 
 [workspace.dependencies]
 anyhow = "1.0"

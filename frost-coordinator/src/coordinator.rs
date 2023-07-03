@@ -2,14 +2,6 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use frost_signer::config::{Config, Error as ConfigError};
-use frost_signer::{
-    net::{Error as HttpNetError, Message, NetListen},
-    signing_round::{
-        DkgBegin, DkgPublicShare, MessageTypes, NonceRequest, NonceResponse, Signable,
-        SignatureShareRequest,
-    },
-};
 use hashbrown::HashSet;
 use p256k1::ecdsa::PublicKey;
 use tracing::{debug, info, warn};
@@ -18,8 +10,23 @@ use wsts::{
     common::{PolyCommitment, PublicNonce, Signature, SignatureShare},
     compute,
     errors::AggregatorError,
-    v1, Point, Scalar,
+    Point, Scalar, v1,
 };
+
+use frost_signer::{
+    net::{Error as HttpNetError, Message, NetListen},
+    signing_round::{
+        CreateFundingTx, DkgBegin, DkgPublicShare, MessageTypes, NonceRequest, NonceResponse,
+        Signable, SignatureShareRequest,
+    },
+};
+use frost_signer::config::{Config, Error as ConfigError};
+use bitcoin::{Address, blockdata::{opcodes::all, script}, hashes::hex::FromHex, KeyPair, Network, OutPoint, Script, secp256k1::{All, Secp256k1}, Transaction, TxIn, util::taproot, XOnlyPublicKey};
+use bitcoin::schnorr::TapTweak;
+use bitcoin::util::taproot::{ControlBlock, TaprootSpendInfo};
+
+pub const DEVNET_COORDINATOR_ID: u32 = 0;
+pub const DEVNET_COORDINATOR_DKG_ID: u64 = 0; //TODO: Remove, this is a correlation id
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -50,12 +57,15 @@ pub enum Command {
 }
 
 pub struct Coordinator<Network: NetListen> {
-    id: u32, // Used for relay coordination
+    id: u32,
+    // Used for relay coordination
     current_dkg_id: u64,
     current_dkg_public_id: u64,
     current_sign_id: u64,
     current_sign_nonce_id: u64,
-    total_signers: u32, // Assuming the signers cover all id:s in {1, 2, ..., total_signers}
+    current_create_tx_id: u64,
+    total_signers: u32,
+    // Assuming the signers cover all id:s in {1, 2, ..., total_signers}
     total_keys: u32,
     threshold: u32,
     network: Network,
@@ -65,16 +75,27 @@ pub struct Coordinator<Network: NetListen> {
     aggregate_public_key: Point,
     network_private_key: Scalar,
     public_key: PublicKey,
+    // degens needed
+    funding_tx_id: u64,
+    block_height: u64
 }
 
 impl<Network: NetListen> Coordinator<Network> {
     pub fn new(id: u32, config: &Config, network: Network) -> Result<Self, Error> {
+
+        // bitcoin node here for block height
+        // block height should be for when enough are partaking
+        // they should already partake so it will be this block height
+
+        // block height 0 by default and when doing an operation have it parsed from degen-coordinator
+
         Ok(Self {
             id,
             current_dkg_id: 0,
             current_dkg_public_id: 0,
             current_sign_id: 1,
             current_sign_nonce_id: 1,
+            current_create_tx_id: 0,
             total_signers: config.total_signers,
             total_keys: config.total_keys,
             threshold: config.keys_threshold,
@@ -85,13 +106,19 @@ impl<Network: NetListen> Coordinator<Network> {
             signature_shares: Default::default(),
             network_private_key: config.network_private_key,
             public_key: config.coordinator_public_key,
+            // degens
+            funding_tx_id: 0,
+            // how to properly get the block height here?
+            // bitcoin node call before
+            block_height: 0
+
         })
     }
 }
 
 impl<Network: NetListen> Coordinator<Network>
-where
-    Error: From<Network::Error>,
+    where
+        Error: From<Network::Error>,
 {
     pub fn run(&mut self, command: &Command) -> Result<(), Error> {
         match command {
@@ -125,6 +152,37 @@ where
         self.start_private_shares()?;
         self.wait_for_dkg_end()?;
         Ok(public_key)
+    }
+
+    pub fn run_degen_create_funding_txs(&mut self) -> Result<(), Error> {
+        self.current_create_tx_id = self.current_create_tx_id.wrapping_add(1);
+        self.start_create_funding_txs()?;
+        let something = self.wait_for_funding_txs()?;
+        Ok(())
+    }
+
+    fn start_create_funding_txs(&mut self) -> Result<(), Error> {
+        info!(
+            "Create funding txs number #{}.",
+            self.current_create_tx_id
+        );
+        let create_funding_tx = CreateFundingTx {
+            funding_tx_id: self.funding_tx_id,
+            // block_height: self.block_height, // the signers will call this on their node
+            public_key_aggregated: self.aggregate_public_key
+        };
+        // TODO: get the format we want for the public key
+
+
+        let create_funding_txs_message = Message {
+            sig: create_funding_tx.sign(&self.network_private_key).expect(""),
+            msg: MessageTypes::CreateFundingTx(create_funding_tx),
+        };
+
+        self.network.send_message(create_funding_txs_message)?;
+
+
+        Ok(())
     }
 
     fn start_public_shares(&mut self) -> Result<(), Error> {
@@ -468,6 +526,31 @@ where
             .build();
         backoff::retry_notify(backoff_timer, get_next_message, notify).map_err(|_| Error::Timeout)
     }
+
+    fn wait_for_funding_txs(&mut self) -> Result<Point, Error> {
+        let mut ids_to_await: HashSet<u32> = (1..=self.total_signers).collect();
+
+        info!(
+            "Funding Tx Round #{}: waiting for funding txs from signers {:?}",
+            self.current_create_tx_id, ids_to_await
+        );
+
+        loop {
+            if ids_to_await.is_empty() {
+                info!("We have all the input txs");
+            }
+
+            match self.wait_for_next_message()?.msg {
+                MessageTypes::FundingTxDone(funding_tx_done) => {
+                    ids_to_await.remove(&funding_tx_done.signer_id);
+                    info!(
+                        "Received round #{} from signer #{}. Waiting on {:?}. Message was {:?}",
+                        funding_tx_done.funding_tx_id, funding_tx_done.signer_id, ids_to_await, funding_tx_done.funding_tx_done
+                    );
+                }
+                _ => {}
+            }
+        }
 
     pub fn public_key(&self) -> &PublicKey {
         &self.public_key

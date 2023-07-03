@@ -1,3 +1,7 @@
+// TODO: Set appropriate types
+type ContractIdentifier = String;
+type StacksPrivateKey = String;
+
 use blockstack_lib::{
     address::AddressHashMode,
     burnchains::Address,
@@ -32,6 +36,23 @@ pub enum Error {
 pub enum Network {
     Mainnet,
     Testnet,
+    Regtest
+}
+
+#[derive(serde::Deserialize)]
+pub struct Config {
+    pub sbtc_contract: ContractIdentifier,
+    pub stacks_private_key: StacksPrivateKey,
+    pub stacks_node_rpc_url: Url,
+    pub bitcoin_node_rpc_url: Url,
+    pub frost_dkg_round_id: u64,
+    pub signer_config_path: String,
+    pub start_block_height: Option<u64>,
+    pub rusqlite_path: Option<String>,
+    /// The network version we are using ('mainnet' or 'testnet'). Default: 'mainnet'
+    pub network: Option<Network>,
+    /// The transaction fee in Satoshis used to broadcast transactions to the stacks node
+    pub transaction_fee: u64,
 }
 
 #[derive(serde::Deserialize, Default)]

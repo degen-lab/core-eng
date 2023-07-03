@@ -58,6 +58,7 @@ impl NodeClient {
                 debug!("Timeout exceeded.");
                 return Err(backoff::Error::Permanent(StacksNodeError::Timeout));
             }
+
             let request = self.client.get(url.as_str());
             let response = request.send().map_err(StacksNodeError::ReqwestError)?;
             Ok(response)
@@ -402,7 +403,8 @@ mod tests {
     use std::{
         io::{BufWriter, Read, Write},
         net::{SocketAddr, TcpListener},
-        thread::spawn,
+        thread::{sleep, spawn},
+        time::Duration,
     };
 
     use blockstack_lib::{
@@ -413,6 +415,7 @@ mod tests {
             TransactionAuth, TransactionPayload, TransactionPostConditionMode,
             TransactionPublicKeyEncoding, TransactionSpendingCondition, TransactionVersion,
         },
+
         types::chainstate::{StacksPrivateKey, StacksPublicKey},
         util::{hash::Hash160, secp256k1::MessageSignature},
     };

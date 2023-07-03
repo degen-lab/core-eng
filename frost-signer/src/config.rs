@@ -10,6 +10,20 @@ use toml;
 
 use crate::util::parse_public_key;
 
+// TODO: Set appropriate types
+type ContractIdentifier = String;
+type StacksPrivateKey = String;
+type Url = String;
+
+
+#[derive(Clone, Deserialize, Default, Debug)]
+pub enum Network {
+    #[default]
+    Mainnet,
+    Testnet,
+    Regtest
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("{0}")]
@@ -58,6 +72,13 @@ struct RawConfig {
     pub network_private_key: String,
     signers: Vec<RawSigners>,
     coordinator_public_key: String,
+    // pub mining_contract: ContractIdentifier,
+    pub stacks_private_key: StacksPrivateKey,
+    // pub stacks_node_rpc_url: Url,
+    pub bitcoin_node_rpc_url: Url,
+    pub signer_config_path: String,
+    pub network: Option<Network>,
+    pub transaction_fee: u64,
 }
 
 pub type SignerKeyIds = HashMap<u32, Vec<u32>>;
@@ -123,6 +144,13 @@ pub struct Config {
     pub coordinator_public_key: ecdsa::PublicKey,
     pub total_signers: u32,
     pub total_keys: u32,
+    // pub mining_contract: ContractIdentifier,
+    pub stacks_private_key: StacksPrivateKey,
+    // pub stacks_node_rpc_url: Url, // TODO: later use
+    pub bitcoin_node_rpc_url: Url,
+    pub signer_config_path: String,
+    pub network: Option<Network>,
+    pub transaction_fee: u64,
 }
 
 impl Config {

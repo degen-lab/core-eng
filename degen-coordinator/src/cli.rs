@@ -32,4 +32,6 @@ pub enum Command {
     Dkg,
     // Run distributed key generation round then sign a message
     DkgSign,
+    // Us
+    DegenRunOne
 }

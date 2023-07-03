@@ -21,6 +21,10 @@ pub enum Error {
     HexError(#[from] HexError),
     #[error("Did not recognize status: {0}")]
     InvalidStatusError(String),
+    #[error("Entry does not exist")]
+    EntryDoesNotExist,
+    #[error("Missing Start Block Height")]
+    MissingStartBlockHeight,
 }
 
 // Workaround to allow non-perfect conversions in `Entry::from_row`
@@ -33,6 +37,21 @@ impl From<Error> for rusqlite::Error {
 pub struct SqlitePegQueue {
     conn: rusqlite::Connection,
     start_block_height: u64,
+}
+
+
+impl TryFrom<&Config> for SqlitePegQueue {
+    type Error = Error;
+    fn try_from(cfg: &Config) -> Result<Self, Error> {
+        let start_block_height = cfg
+            .start_block_height
+            .ok_or_else(|| Error::MissingStartBlockHeight)?;
+        if let Some(path) = &cfg.rusqlite_path {
+            Self::new(path, start_block_height)
+        } else {
+            Self::in_memory(start_block_height)
+        }
+    }
 }
 
 impl SqlitePegQueue {
@@ -129,6 +148,7 @@ impl SqlitePegQueue {
             Entry::from_row,
         )?)
     }
+
 
     fn last_processed_block_height(&self) -> Result<u64, Error> {
         Ok(self
@@ -497,7 +517,7 @@ mod tests {
 
         stacks_node_mock
     }
-
+  
     fn stacks_node_mock_with_no_sbtc_ops(block_height: u64) -> stacks_node::MockStacksNode {
         let mut stacks_node_mock = stacks_node::MockStacksNode::new();
 

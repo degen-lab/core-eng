@@ -44,11 +44,14 @@ impl Signer {
         loop {
             // Retreive a message from coordinator
             let inbound = rx.recv()?; // blocking
+
             let outbounds = round.process(inbound.msg)?;
+            // Everything beneath is what this signer is passing along to the relay.
             for out in outbounds {
                 let msg = Message {
                     msg: out.clone(),
                     sig: match out {
+
                         MessageTypes::DkgBegin(msg) | MessageTypes::DkgPrivateBegin(msg) => msg
                             .sign(&network_private_key)
                             .expect("failed to sign DkgBegin")
@@ -81,6 +84,15 @@ impl Signer {
                             .sign(&network_private_key)
                             .expect("failed to sign SignShareResponse")
                             .to_vec(),
+                        MessageTypes::CreateFundingTx(msg) => msg
+                            .sign(&network_private_key)
+                            .expect("")
+                            .to_vec(),
+                        MessageTypes::FundingTxDone(msg) => msg
+                             .sign(&network_private_key)
+                             .expect("")
+                             .to_vec()
+                        }
                     },
                 };
                 net.send_message(msg)?;
@@ -242,6 +254,18 @@ fn verify_msg(
                     "Received a SignShareResponse message with an unknown id: {}",
                     msg.signer_id
                 );
+                return false;
+            }
+        }
+        MessageTypes::CreateFundingTx(msg)=> {
+            if !msg.verify(&m.sig, coordinator_public_key) {
+                warn!("Received a CreateFundingTx message with an invalid signature.");
+                return false;
+            }
+        }
+        MessageTypes::FundingTxDone(msg)=> {
+            if !msg.verify(&m.sig, coordinator_public_key) {
+                warn!("Received a FundingTxDone message with an invalid signature.");
                 return false;
             }
         }
