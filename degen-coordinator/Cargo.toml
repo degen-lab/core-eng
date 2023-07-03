@@ -24,9 +24,13 @@ bitcoin = { version = "0.29.2", features = ["rand", "bitcoinconsensus"] }
 reqwest = { version = "0.11.14", features = ["blocking", "json"] }
 backoff = { workspace = true }
 ureq.workspace = true
+url = { workspace = true }
+bdk.workspace = true
+hex.workspae = true
 
 [dev-dependencies]
 mockall = { workspace = true }
 rand = "0.8.5"
 hex = "0.4.3"
 test-utils = { path = "../test-utils" }
+tempdir = "0.3.7"

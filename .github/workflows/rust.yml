@@ -29,7 +29,7 @@ jobs:
     strategy:
       matrix:
         # can't run on `windows-latests`
-        os: [ubuntu-latest, macos-latest, buildjet-4vcpu-ubuntu-2204-arm]
+        os: [ubuntu-latest, buildjet-4vcpu-ubuntu-2204-arm]
         type: ['', '--release']
     runs-on: ${{matrix.os}}
     steps:
@@ -96,7 +96,7 @@ jobs:
         run: deno cache ./yarpc/js/stacks/transactions.ts
       - run: cargo install cargo-tarpaulin
       # - run: cargo tarpaulin
-      - run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml --avoid-cfg-tarpaulin --exclude frost-coordinator
+      - run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml --avoid-cfg-tarpaulin
       - uses: codecov/codecov-action@v3
         with:
           fail_ci_if_error: true

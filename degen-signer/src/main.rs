@@ -11,7 +11,6 @@ fn main() {
 
     // Initialize logging
     logging::initiate_tracing_subscriber().unwrap();
-
     // Determine what action the caller wishes to perform
     match cli.command {
         Command::Run { id, config } => {

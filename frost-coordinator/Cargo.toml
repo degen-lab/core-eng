@@ -22,6 +22,8 @@ serde = { version = "1.0", features = ["serde_derive"] }
 bitcoin = { version = "0.29.2", features = ["rand", "bitcoinconsensus"] }
 
 [dev-dependencies]
+rand_core = { workspace = true }
+rand = { workspace = true }
 relay-server = { path = "../relay-server" }
 test-utils = { path = "../test-utils" }
 

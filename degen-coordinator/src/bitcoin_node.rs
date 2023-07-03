@@ -1,4 +1,4 @@
-use std::{io::Cursor, str::FromStr};
+use std::{borrow::Cow, io::Cursor, str::FromStr};
 
 use bitcoin::{
     consensus::Encodable,
@@ -7,15 +7,15 @@ use bitcoin::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
-use tracing::{debug, warn};
-
+use tracing::{debug, info, warn};
+use crate::peg_wallet::BitcoinWallet;
 pub trait BitcoinNode {
     /// Broadcast the BTC transaction to the bitcoin node
     fn broadcast_transaction(&self, tx: &BitcoinTransaction) -> Result<Txid, Error>;
     /// Load the Bitcoin wallet from the given address
-    fn load_wallet(&self, address: &BitcoinAddress) -> Result<(), Error>;
+    fn load_wallet(&self, address: &impl BitcoinWallet) -> Result<(), Error>;
     /// Get all utxos from the given address
-    fn list_unspent(&self, address: &BitcoinAddress) -> Result<Vec<UTXO>, Error>;
+    fn list_unspent(&self, address: &impl BitcoinWallet) -> Result<Vec<UTXO>, Error>;
 }
 
 pub type BitcoinTransaction = bitcoin::Transaction;
@@ -32,6 +32,10 @@ pub enum Error {
     InvalidUTXO(String),
     #[error("Invalid transaction hash")]
     InvalidTxHash,
+    #[error("Could not compute descriptor checksum: {0}")]
+    DescriptorError(#[from] bdk::descriptor::error::Error),
+    #[error("URL Parse error: {0}")]
+    UrlParseError(#[from] url::ParseError),
 }
 
 #[allow(non_snake_case)]
@@ -60,17 +64,18 @@ struct Wallet {
 }
 
 pub struct LocalhostBitcoinNode {
-    bitcoind_api: String,
+    bitcoind_api: Url,
+    wallet_name: String,
 }
 
 impl BitcoinNode for LocalhostBitcoinNode {
     fn broadcast_transaction(&self, tx: &BitcoinTransaction) -> Result<Txid, Error> {
-        let mut writer = Cursor::new(vec![]);
-        tx.consensus_encode(&mut writer)?;
-        let raw_tx = writer.into_inner().to_hex();
+        let mut tx_bytes: Vec<u8> = vec![];
+        tx.consensus_encode(&mut tx_bytes)?;
+        let raw_tx = hex::encode(&tx_bytes);
 
         let result = self
-            .call("sendrawtransaction", vec![raw_tx])?
+            .call("sendrawtransaction", [&raw_tx])?
             .as_str()
             .ok_or(Error::InvalidResponseJSON(
                 "No transaction hash in sendrawtransaction response".to_string(),
@@ -82,14 +87,16 @@ impl BitcoinNode for LocalhostBitcoinNode {
         ))
     }
 
-    fn load_wallet(&self, address: &BitcoinAddress) -> Result<(), Error> {
+    fn load_wallet(&self, address: &impl BitcoinWallet) -> Result<(), Error> {
+        debug!("Loading bitcoin wallet...");
         let result = self.create_empty_wallet();
         if let Err(Error::RPCError(message)) = &result {
-            if !message.ends_with("Database already exists.") {
+            if message.contains("Database already exists") {
+                // If the database already exists, no problem.
+                info!("Wallet already exists");
+            } else {
                 return result;
             }
-            // If the database already exists, no problem. Just emit a warning.
-            warn!(message);
         }
         // Import the address
         self.import_address(address)?;
@@ -97,14 +104,15 @@ impl BitcoinNode for LocalhostBitcoinNode {
     }
 
     /// List the UTXOs filtered on a given address.
-    fn list_unspent(&self, address: &BitcoinAddress) -> Result<Vec<UTXO>, Error> {
+    fn list_unspent(&self, wallet: &impl BitcoinWallet) -> Result<Vec<UTXO>, Error> {
+        debug!("Retrieving utxos...");
         // Construct the params using defaults found at https://developer.bitcoin.org/reference/rpc/listunspent.html?highlight=listunspent
-        let addresses: Vec<String> = vec![address.to_string()];
+        let addresses: Vec<String> = vec![wallet.address().to_string()];
         let min_conf = 0i64;
         let max_conf = 9999999i64;
         let params = (min_conf, max_conf, addresses);
 
-        let response = self.call("listunspent", params)?;
+        let response = self.call_wallet("listunspent", params)?;
 
         // Convert the response to a vector of unspent transactions
         let result: Result<Vec<UTXO>, Error> = response
@@ -120,7 +128,6 @@ impl BitcoinNode for LocalhostBitcoinNode {
     }
 }
 
-
 #[derive(Debug, Deserialize)]
 struct RpcErrorResponse {
     error: RpcError,
@@ -133,8 +140,11 @@ struct RpcError {
 }
 
 impl LocalhostBitcoinNode {
-    pub fn new(bitcoind_api: String) -> LocalhostBitcoinNode {
-        Self { bitcoind_api }
+    pub fn new(bitcoind_api: Url) -> LocalhostBitcoinNode {
+        Self {
+            bitcoind_api,
+            wallet_name: "stacks_coordinator".to_string(),
+        }
     }
 
     /// Make the Bitcoin RPC method call with the corresponding paramenters
@@ -143,48 +153,59 @@ impl LocalhostBitcoinNode {
         method: &str,
         params: impl ureq::serde::Serialize,
     ) -> Result<serde_json::Value, Error> {
+        self.call_path(method, params, None)
+    }
+
+    /// Make the Bitcoin RPC method call against the "/wallet/<self.wallet_name" with the corresponding paramenters
+    fn call_wallet(
+        &self,
+        method: &str,
+        params: impl ureq::serde::Serialize,
+    ) -> Result<serde_json::Value, Error> {
+        self.call_path(
+            method,
+            params,
+            Some(&format!("/wallet/{}", self.wallet_name)),
+        )
+    }
+
+    /// Make the Bitcoin RPC method call against the specified path with the corresponding paramenters
+    fn call_path(
+        &self,
+        method: &str,
+        params: impl ureq::serde::Serialize,
+        path: Option<&str>,
+    ) -> Result<serde_json::Value, Error> {
         debug!("Making Bitcoin RPC {} call...", method);
         let json_rpc =
             ureq::json!({"jsonrpc": "2.0", "id": "stx", "method": method, "params": params});
-        println!("{:#?}", &json_rpc);
-        // let response =
-        match ureq::post(&self.bitcoind_api)
-            .send_json(json_rpc) {
-            Ok(response) => {
-                let json_response = response.into_json::<serde_json::Value>()?;
-                let json_result = json_response
-                    .get("result")
-                    .ok_or_else(|| Error::InvalidResponseJSON("Missing entry 'result'.".to_string()))?
-                    .to_owned();
-                Ok(json_result)
-            }
-            Err(ureq::Error::Status(code, response)) => {
-                let rpc_response: RpcErrorResponse = serde_json::from_str(&response.into_string().unwrap()).unwrap();
-                println!("Response {:#?}", &rpc_response);
-                // println!("JSON response {:#?}", &response.into_json()?);
-                // println!("JSON response {:#?}", &response.into_string()?);
-                Err(Error::RPCError(rpc_response.error.message))
-            }
-            Err(error) => { Err(Error::RPCError(error.to_string())) }
-        }
-        // let response = ureq::post(&self.bitcoind_api)
-        //     .send_json(json_rpc)
-        //     .map_err(|e| Error::RPCError(e.to_string()))?;
-        // let json_response = response.into_json::<serde_json::Value>()?;
-        // let json_result = json_response
-        //     .get("result")
-        //     .ok_or_else(|| Error::InvalidResponseJSON("Missing entry 'result'.".to_string()))?
-        //     .to_owned();
-        // Ok(json_result)
+
+        let url = if let Some(path) = path {
+            Cow::Owned(self.bitcoind_api.join(path)?)
+        } else {
+            Cow::Borrowed(&self.bitcoind_api)
+        };
+
+        let response = ureq::post(&url.to_string())
+            .send_json(json_rpc)
+            .map_err(|e| Error::RPCError(parse_rpc_error(e)))?;
+
+        let json_response = response.into_json::<serde_json::Value>()?;
+        let json_result = json_response
+            .get("result")
+            .ok_or_else(|| Error::InvalidResponseJSON("Missing entry 'result'.".to_string()))?
+            .to_owned();
+        Ok(json_result)
     }
 
     fn create_empty_wallet(&self) -> Result<(), Error> {
-        let wallet_name = "test";
-        let disable_private_keys = false;
+        debug!("Creating wallet...");
+        let wallet_name = &self.wallet_name;
+        let disable_private_keys = true;
         let blank = true;
         let passphrase = "";
         let avoid_reuse = false;
-        let descriptors = false;
+        let descriptors = true;
         let load_on_startup = true;
         let params = (
             wallet_name,
@@ -196,6 +217,7 @@ impl LocalhostBitcoinNode {
             load_on_startup,
         );
         debug!("Creating wallet...");
+
         let wallet = serde_json::from_value::<Wallet>(self.call("createwallet", params)?)
             .map_err(|e| Error::InvalidResponseJSON(e.to_string()))?;
         if !wallet.warning.is_empty() {
@@ -207,23 +229,46 @@ impl LocalhostBitcoinNode {
         Ok(())
     }
 
-    fn import_address(&self, address: &BitcoinAddress) -> Result<(), Error> {
-        let address = address.to_string();
-        debug!("Importing address {}...", address);
-        let label = "";
-        let rescan = true;
-        let p2sh = false;
-        let params = (address, label, rescan, p2sh);
-        self.call("importaddress", params)?;
-        Ok(())
-    }
-
     pub fn get_block_count(&self) -> Result<u64, Error> {
         debug!("Getting block count...");
         let block_count = serde_json::from_value::<Number>(self.call("getblockcount", ())?)
             .map_err(|e| Error::InvalidResponseJSON(e.to_string()))?
             .as_u64().expect("block count not a number");
         Ok(block_count)
+    }
+
+    fn import_address(&self, wallet: &impl BitcoinWallet) -> Result<(), Error> {
+        debug!("Importing address {}...", wallet.address());
+
+        // Create a descriptor using a Bech32 (segwit) Pay-to-Taproot (P2TR) address.
+        let desc = {
+            let pub_hex = hex::encode(wallet.x_only_pub_key().serialize());
+            let descriptor = format!("tr({})", pub_hex);
+            let checksum = calc_checksum(&descriptor)?;
+
+            format!("{}#{}", descriptor, checksum)
+        };
+
+        let timestamp = "now";
+        // let range = 1; // Set to 1 to ensure only one address is imported
+        let internal = false;
+        let watchonly = true;
+        let label = "";
+        let keypool = true;
+        let rescan = true;
+        let descriptor_object = serde_json::json!({
+            "desc": desc,
+            // "range": range,
+            "timestamp": timestamp,
+            "internal": internal,
+            "watchonly": watchonly,
+            "label": label,
+            "keypool": keypool,
+            "rescan": rescan
+        });
+        let params = (serde_json::json!([descriptor_object]),);
+        self.call_wallet("importdescriptors", params)?;
+        Ok(())
     }
 
     fn raw_to_utxo(raw: &Value) -> Result<UTXO, Error> {
@@ -279,6 +324,17 @@ impl LocalhostBitcoinNode {
                 "Could not parse safe".to_string(),
             ))?,
         })
+    }
+}
+
+fn parse_rpc_error(err: ureq::Error) -> String {
+    match err {
+        ureq::Error::Status(status, response) => format!(
+            "{} {}",
+            status,
+            response.into_string().unwrap_or_else(|e| e.to_string())
+        ),
+        ureq::Error::Transport(err) => err.to_string(),
     }
 }
 
