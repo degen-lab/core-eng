@@ -17,7 +17,7 @@ fn test_wrap() -> io::Result<()> {
     let mut js = Js::new("./js/tests/mirror.ts")?;
     assert_eq!(
         json_call(&mut js, "{\"b\":[],\"a\":2}")?,
-        "{\"a\":2,\"b\":[]}"
+        "{\"b\":[],\"a\":2}"
     );
     assert_eq!(json_call(&mut js, "[54,null]")?, "[54,null]");
     assert_eq!(json_call(&mut js, "42")?, "42");

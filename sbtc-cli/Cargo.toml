@@ -1,0 +1,19 @@
+[package]
+name = "sbtc-cli"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow.workspace = true
+array-bytes.workspace = true
+bdk.workspace = true
+bitcoin.workspace = true
+blockstack-core.workspace = true
+clap.workspace = true
+sha256.workspace = true
+
+[[bin]]
+name = "sbtc"
+path = "src/main.rs"
