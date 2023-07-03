@@ -7,6 +7,7 @@ pub enum States {
     DkgPrivateGather,
     SignGather,
     Signed,
+    BitcoinFundingTx,
 }
 
 pub trait StateMachine {

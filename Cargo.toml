@@ -10,7 +10,6 @@ members = [
     "test-utils",
     "test-vectors",
     "yarpc",
-    "first-build",
     "degen-coordinator",
     "degen-signer"]
 

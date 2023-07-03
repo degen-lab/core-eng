@@ -1,3 +1,13 @@
+use std::collections::BTreeMap;
+use bitcoin::blockdata::opcodes::all;
+use bitcoin::blockdata::script;
+use bitcoin::{Address, KeyPair, Network, PackedLockTime, Script, secp256k1, Transaction, Witness, XOnlyPublicKey};
+use bitcoin::schnorr::TapTweak;
+use bitcoin::secp256k1::{All, Secp256k1};
+use bitcoin::util::sighash::SighashCache;
+use bitcoin::util::{sighash, taproot};
+use bitcoin::util::taproot::{ControlBlock, TaprootSpendInfo};
+
 use hashbrown::{HashMap, HashSet};
 use p256k1::{
     ecdsa,
@@ -7,7 +17,6 @@ use p256k1::{
 use rand_core::{CryptoRng, OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 use tracing::{debug, info, warn};
 pub use wsts;
 use wsts::{
@@ -16,12 +25,15 @@ use wsts::{
     v1,
 };
 
+
 use crate::{
     config::SignerKeys,
     signer::Signer as FrostSigner,
     state_machine::{Error as StateMachineError, StateMachine, States},
     util::{decrypt, encrypt, make_shared_secret},
 };
+use crate::bitcoin_node::{BitcoinNode, BitcoinTransaction, LocalhostBitcoinNode, UTXO};
+use crate::scripting::create_tx_signed_key_taproot_fund_script;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -83,6 +95,7 @@ pub struct SigningRound {
     pub public_nonces: Vec<PublicNonce>,
     pub network_private_key: Scalar,
     pub signer_keys: SignerKeys,
+    pub local_host_bitcoin_node: LocalhostBitcoinNode, // TODO: check if this is working
 }
 
 pub struct Signer {
@@ -101,6 +114,10 @@ impl StateMachine for SigningRound {
         let prev_state = &self.state;
         let accepted = match state {
             States::Idle => true,
+            // can do bitcoin funding if previous idle
+            States::BitcoinFundingTx => {
+                prev_state == &States::Idle
+            }
             States::DkgPublicDistribute => {
                 prev_state == &States::Idle
                     || prev_state == &States::DkgPublicGather
@@ -201,7 +218,9 @@ impl Signable for DkgBegin {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CreateFundingTx {
-    pub funding_tx_id: u64, // QQ: Why do we need this?
+    pub funding_tx_id: u64, // QQ: Why do we need this? - keep track of the round of the tx created
+    // pub block_height: u64, // TODO: remove this
+    pub public_key_aggregated: Point,
 }
 
 impl Signable for CreateFundingTx {
@@ -345,6 +364,7 @@ impl SigningRound {
         key_ids: Vec<u32>,
         network_private_key: Scalar,
         signer_keys: SignerKeys,
+        bitcoin_node_rpc_url: String,
     ) -> SigningRound {
         assert!(threshold <= total);
         let mut rng = OsRng::default();
@@ -353,6 +373,7 @@ impl SigningRound {
             frost_signer,
             signer_id,
         };
+        let local_host_bitcoin_node = LocalhostBitcoinNode::new(bitcoin_node_rpc_url);
 
         SigningRound {
             dkg_id: 0,
@@ -368,6 +389,7 @@ impl SigningRound {
             public_nonces: vec![],
             network_private_key,
             signer_keys,
+            local_host_bitcoin_node,
         }
     }
 
@@ -434,7 +456,7 @@ impl SigningRound {
         };
         let dkg_end = MessageTypes::DkgPublicEnd(dkg_end);
         info!(
-            "DKG_END round #{} signer_id {}",
+            "modif DKG_END round #{} signer_id {}",
             self.dkg_id, self.signer.signer_id
         );
         Ok(dkg_end)
@@ -738,12 +760,24 @@ impl SigningRound {
 
     fn create_funding_tx(&mut self, create_funding_tx: CreateFundingTx) -> Result<Vec<MessageTypes>, Error> {
         let mut msgs = vec![];
-
+        // TODO: deployer - create here tx to fund
+        // sign it here
         info!(
             "create funding tx #{} for signer #{}",
             create_funding_tx.funding_tx_id,
             self.signer.frost_signer.get_id(),
         );
+
+        // TODO: instantiate and parse bitcoin_node call the config.bitcoin_node_rpc_url filed - remove this
+        let current_block_height = self.local_host_bitcoin_node.get_block_count();
+        // println!("In signer current block height is {}.", current_block_height.unwrap().clone());
+        info!("In signer current block height is {}.", current_block_height.unwrap());
+
+        create_tx_signed_key_taproot_fund_script(
+            self.signer.frost_signer.get_key_ids(),
+
+        )
+
 
         let funding_tx_done = FundingTxDone {
             funding_tx_done: "Andrei is here have no fear".to_string(),
@@ -776,6 +810,14 @@ impl From<&FrostSigner> for SigningRound {
         let network_private_key = signer.config.network_private_key;
         let signer_keys = signer.config.signer_keys.clone();
 
+        // degen fields
+        let stacks_private_key= signer.config.stacks_private_key.clone();
+        let bitcoin_node_rpc_url= signer.config.bitcoin_node_rpc_url.clone();
+        // TODO: add them to signing round
+        let network = signer.config.network.clone();
+        let transaction_fee = signer.config.transaction_fee;
+        let local_host_bitcoin_node = LocalhostBitcoinNode::new(bitcoin_node_rpc_url);
+
         SigningRound {
             dkg_id: 1,
             dkg_public_id: 1,
@@ -793,6 +835,7 @@ impl From<&FrostSigner> for SigningRound {
             public_nonces: vec![],
             network_private_key,
             signer_keys,
+            local_host_bitcoin_node,
         }
     }
 }
@@ -801,7 +844,7 @@ impl From<&FrostSigner> for SigningRound {
 mod test {
     use hashbrown::HashMap;
     use rand_core::{CryptoRng, OsRng, RngCore};
-    use wsts::{common::PolyCommitment, schnorr::ID, Scalar};
+    use wsts::{common::PolyCommitment, Scalar, schnorr::ID};
 
     use crate::signing_round::{
         DkgPrivateShares, DkgPublicShare, DkgStatus, MessageTypes, SigningRound,
@@ -817,8 +860,9 @@ mod test {
     #[test]
     fn dkg_public_share() {
         let mut rnd = get_rng();
+        let bitcoin_node_rpc_url: String = "http://devnet:devnet@localhost:18443".to_string();
         let mut signing_round =
-            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default());
+            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default(), bitcoin_node_rpc_url);
         let public_share = DkgPublicShare {
             dkg_id: 0,
             party_id: 0,
@@ -834,8 +878,9 @@ mod test {
 
     #[test]
     fn dkg_private_shares() {
+        let bitcoin_node_rpc_url:String = "http://devnet:devnet@localhost:18443".to_string();
         let mut signing_round =
-            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default());
+            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default(), bitcoin_node_rpc_url);
         let mut private_shares = DkgPrivateShares {
             dkg_id: 0,
             key_id: 0,
@@ -849,8 +894,9 @@ mod test {
     #[test]
     fn public_shares_done() {
         let mut rnd = get_rng();
+        let bitcoin_node_rpc_url:String = "http://devnet:devnet@localhost:18443".to_string();
         let mut signing_round =
-            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default());
+            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default(), bitcoin_node_rpc_url);
         // publich_shares_done starts out as false
         assert_eq!(false, signing_round.public_shares_done());
 
@@ -871,8 +917,9 @@ mod test {
     #[test]
     fn can_dkg_end() {
         let mut rnd = get_rng();
+        let bitcoin_node_rpc_url:String = "http://devnet:devnet@localhost:18443".to_string();
         let mut signing_round =
-            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default());
+            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default(), bitcoin_node_rpc_url);
         // can_dkg_end starts out as false
         assert_eq!(false, signing_round.can_dkg_end());
 
@@ -894,8 +941,9 @@ mod test {
 
     #[test]
     fn dkg_ended() {
+        let bitcoin_node_rpc_url:String = "http://devnet:devnet@localhost:18443".to_string();
         let mut signing_round =
-            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default());
+            SigningRound::new(1, 1, 1, vec![1], Default::default(), Default::default(), bitcoin_node_rpc_url);
         match signing_round.dkg_ended() {
             Ok(dkg_end) => match dkg_end {
                 MessageTypes::DkgEnd(dkg_end) => match dkg_end.status {
@@ -908,3 +956,7 @@ mod test {
         }
     }
 }
+
+
+
+

@@ -2,14 +2,6 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use frost_signer::config::{Config, Error as ConfigError};
-use frost_signer::{
-    net::{Error as HttpNetError, Message, NetListen},
-    signing_round::{
-        DkgBegin, DkgPublicShare, MessageTypes, NonceRequest, NonceResponse, Signable,
-        SignatureShareRequest, CreateFundingTx,
-    },
-};
 use hashbrown::HashSet;
 use tracing::{debug, info, warn};
 use wsts::{
@@ -17,8 +9,22 @@ use wsts::{
     common::{PolyCommitment, PublicNonce, Signature, SignatureShare},
     compute,
     errors::AggregatorError,
-    v1, Point, Scalar,
+    Point, Scalar, v1,
 };
+
+use frost_signer::{
+    net::{Error as HttpNetError, Message, NetListen},
+    signing_round::{
+        CreateFundingTx, DkgBegin, DkgPublicShare, MessageTypes, NonceRequest, NonceResponse,
+        Signable, SignatureShareRequest,
+    },
+};
+use frost_signer::config::{Config, Error as ConfigError};
+use bitcoin::{Address, blockdata::{opcodes::all, script}, hashes::hex::FromHex, KeyPair, Network, OutPoint, Script, secp256k1::{All, Secp256k1}, Transaction, TxIn, util::taproot, XOnlyPublicKey};
+use bitcoin::schnorr::TapTweak;
+use bitcoin::util::taproot::{ControlBlock, TaprootSpendInfo};
+
+
 
 pub const DEVNET_COORDINATOR_ID: u32 = 0;
 pub const DEVNET_COORDINATOR_DKG_ID: u64 = 0; //TODO: Remove, this is a correlation id
@@ -69,10 +75,20 @@ pub struct Coordinator<Network: NetListen> {
     signature_shares: BTreeMap<u32, Vec<SignatureShare>>,
     aggregate_public_key: Point,
     network_private_key: Scalar,
+    // degens needed
+    funding_tx_id: u64,
+    block_height: u64
 }
 
 impl<Network: NetListen> Coordinator<Network> {
     pub fn new(id: u32, config: &Config, network: Network) -> Result<Self, Error> {
+
+        // bitcoin node here for block height
+        // block height should be for when enough are partaking
+        // they should already partake so it will be this block height
+
+        // block height 0 by default and when doing an operation have it parsed from degen-coordinator
+
         Ok(Self {
             id,
             current_dkg_id: 0,
@@ -89,6 +105,11 @@ impl<Network: NetListen> Coordinator<Network> {
             aggregate_public_key: Point::default(),
             signature_shares: Default::default(),
             network_private_key: config.network_private_key,
+            // degens
+            funding_tx_id: 0,
+            // how to properly get the block height here?
+            // bitcoin node call before
+            block_height: 0
         })
     }
 }
@@ -144,8 +165,12 @@ impl<Network: NetListen> Coordinator<Network>
             self.current_create_tx_id
         );
         let create_funding_tx = CreateFundingTx {
-            funding_tx_id: self.current_dkg_id
+            funding_tx_id: self.funding_tx_id,
+            // block_height: self.block_height, // the signers will call this on their node
+            public_key_aggregated: self.aggregate_public_key
         };
+        // TODO: get the format we want for the public key
+
 
         let create_funding_txs_message = Message {
             sig: create_funding_tx.sign(&self.network_private_key).expect(""),
@@ -153,6 +178,8 @@ impl<Network: NetListen> Coordinator<Network>
         };
 
         self.network.send_message(create_funding_txs_message)?;
+
+
         Ok(())
     }
 
@@ -524,6 +551,7 @@ impl<Network: NetListen> Coordinator<Network>
 #[cfg(test)]
 mod test {
     use hashbrown::HashMap;
+
     use test_utils::Process;
 
     #[test]

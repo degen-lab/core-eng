@@ -35,7 +35,7 @@ pub enum Error {
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug, Deserialize, Serialize, Default, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct UTXO {
     pub txid: String,
     pub vout: u32,
@@ -118,6 +118,7 @@ impl BitcoinNode for LocalhostBitcoinNode {
 
         result
     }
+
 }
 
 

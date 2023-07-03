@@ -8,6 +8,20 @@ use wsts::Scalar;
 
 use crate::util::parse_public_key;
 
+// TODO: Set appropriate types
+type ContractIdentifier = String;
+type StacksPrivateKey = String;
+type Url = String;
+
+
+#[derive(Clone, Deserialize, Default, Debug)]
+pub enum Network {
+    #[default]
+    Mainnet,
+    Testnet,
+    Regtest
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("{0}")]
@@ -56,6 +70,13 @@ pub struct RawConfig {
     pub network_private_key: String,
     signers: Vec<RawSignerKeys>,
     coordinator_public_key: String,
+    // pub mining_contract: ContractIdentifier,
+    pub stacks_private_key: StacksPrivateKey,
+    // pub stacks_node_rpc_url: Url,
+    pub bitcoin_node_rpc_url: Url,
+    pub signer_config_path: String,
+    pub network: Option<Network>,
+    pub transaction_fee: u64,
 }
 
 impl RawConfig {
@@ -124,6 +145,13 @@ pub struct Config {
     pub coordinator_public_key: ecdsa::PublicKey,
     pub total_signers: u32,
     pub total_keys: u32,
+    // pub mining_contract: ContractIdentifier,
+    pub stacks_private_key: StacksPrivateKey,
+    // pub stacks_node_rpc_url: Url, // TODO: later use
+    pub bitcoin_node_rpc_url: Url,
+    pub signer_config_path: String,
+    pub network: Option<Network>,
+    pub transaction_fee: u64,
 }
 
 impl Config {
@@ -134,6 +162,20 @@ impl Config {
         let total_keys = signer_keys.key_ids.len().try_into().unwrap();
         let coordinator_public_key = raw_config.coordinator_public_key()?;
         let network_private_key = raw_config.network_private_key()?;
+        let stacks_private_key = raw_config.stacks_private_key;
+        // let stacks_node_rpc_url = raw_config.stacks_node_rpc_url;
+        let bitcoin_node_rpc_url = raw_config.bitcoin_node_rpc_url;
+        let signer_config_path= raw_config.signer_config_path;
+        let network = raw_config.network;
+        let transaction_fee = raw_config.transaction_fee;
+
+        // let (version, bitcoin_network) = match raw_config.network.as_ref().unwrap_or(&Network::Mainnet)
+        // {
+        //     Network::Mainnet => (TransactionVersion::Mainnet, bitcoin::Network::Bitcoin),
+        //     Network::Testnet => (TransactionVersion::Testnet, bitcoin::Network::Testnet),
+        //     Network::Regtest => (TransactionVersion::Testnet, bitcoin::Network::Regtest),
+        // };
+
         Ok(Self {
             http_relay_url: raw_config.http_relay_url,
             keys_threshold: raw_config.keys_threshold,
@@ -143,6 +185,13 @@ impl Config {
             total_keys,
             signer_keys,
             coordinator_public_key,
+            //
+            stacks_private_key,
+            // stacks_node_rpc_url,
+            bitcoin_node_rpc_url,
+            signer_config_path,
+            network,
+            transaction_fee
         })
     }
 }

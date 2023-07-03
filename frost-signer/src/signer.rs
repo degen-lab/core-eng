@@ -44,6 +44,7 @@ impl Signer {
         loop {
             // Retreive a message from coordinator
             let inbound = rx.recv()?; // blocking
+
             let outbounds = round.process(inbound.msg)?;
             // Everything beneath is what this signer is passing along to the relay.
             for out in outbounds {
