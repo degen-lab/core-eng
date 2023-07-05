@@ -1,9 +1,7 @@
-use std::{thread, time};
 use std::sync::{
     mpsc,
     mpsc::{RecvError, Sender},
 };
-
 use bitcoin::{Address, psbt::Prevouts, SchnorrSig, SchnorrSighashType, Script, secp256k1::{Error as Secp256k1Error, Secp256k1 as GenSecp256k1, All}, Transaction, TxOut, util::{
     base58,
     sighash::{Error as SighashError, SighashCache},
@@ -21,24 +19,27 @@ use wsts::{bip340::SchnorrProof, common::Signature};
 
 use frost_coordinator::{coordinator::Error as FrostCoordinatorError, create_coordinator};
 use frost_signer::net::{Error as HttpNetError, HttpNetListen};
+use std::{thread, time};
+use tracing::debug;
+use wsts::{bip340::SchnorrProof, common::Signature};
 
-// Traits in scope
-use crate::bitcoin_node::{
-    BitcoinNode, BitcoinTransaction, Error as BitcoinNodeError, LocalhostBitcoinNode,
-};
 use crate::bitcoin_wallet::BitcoinWallet;
 use crate::config::{Config, Network};
-use crate::peg_queue::{
-    // Error as FundQueError, FundQueue, DegenOp,
-    Error as PegQueueError, PegQueue, SbtcOp, SqlitePegQueue, SqlitePegQueueError,
-};
 use crate::peg_wallet::{
     BitcoinWallet as BitcoinWalletTrait, Error as PegWalletError, PegWallet,
     StacksWallet as StacksWalletTrait, WrapPegWallet,
 };
 use crate::stacks_node::{self, Error as StacksNodeError};
-use crate::stacks_node::{client::NodeClient, StacksNode};
 use crate::stacks_wallet::StacksWallet;
+
+// Traits in scope
+use crate::bitcoin_node::{
+    BitcoinNode, BitcoinTransaction, Error as BitcoinNodeError, LocalhostBitcoinNode,
+};
+use crate::peg_queue::{
+    Error as PegQueueError, PegQueue, SbtcOp, SqlitePegQueue, SqlitePegQueueError,
+};
+use crate::stacks_node::{client::NodeClient, StacksNode};
 
 type FrostCoordinator = frost_coordinator::coordinator::Coordinator<HttpNetListen>;
 
@@ -74,7 +75,7 @@ pub enum Error {
     #[error("{0}")]
     ConfigError(String),
     #[error(
-    "Invalid generated aggregate public key. Frost coordinator/signers may be misconfigured."
+        "Invalid generated aggregate public key. Frost coordinator/signers may be misconfigured."
     )]
     InvalidPublicKey(#[from] Secp256k1Error),
     #[error("Error occured during signing: {0}")]
@@ -115,7 +116,7 @@ pub trait Coordinator: Sized {
         }
         Ok(())
     }
-
+  
     fn run(mut self) -> Result<()> {
         let (sender, receiver) = mpsc::channel::<Command>();
         Self::poll_ping_thread(sender);
@@ -158,7 +159,6 @@ pub trait Coordinator: Sized {
 
     fn process_queue(&mut self) -> Result<()> {
         match self.peg_queue().sbtc_op()? {
-
             Some(SbtcOp::PegIn(op)) => self.peg_in(op),
             Some(SbtcOp::PegOutRequest(op)) => self.peg_out(op),
             None => Ok(()),
@@ -220,9 +220,6 @@ trait CoordinatorHelpers: Coordinator {
 
         // Broadcast the resulting BTC transaction to the Bitcoin node
         self.bitcoin_node().broadcast_transaction(&fulfill_tx)?;
-        println!("Success on transaction");
-        Ok(())
-    }
 
     fn verify_p2tr_commitment(
         &self,
@@ -489,9 +486,10 @@ impl TryFrom<Config> for StacksCoordinator {
         local_stacks_node.broadcast_transaction(&tx)?;
 
         let local_bitcoin_node = LocalhostBitcoinNode::new(config.bitcoin_node_rpc_url.clone());
+
         // TODO: degens - comment after running it once
-        let loaded_wallets = local_bitcoin_node.list_wallets()?;
-        local_bitcoin_node.unload_wallets(&loaded_wallets)?;
+        // let loaded_wallets = local_bitcoin_node.list_wallets()?;
+        // local_bitcoin_node.unload_wallets(&loaded_wallets)?;
 
         // TODO: degens - update this after rewriting to DegenOps and funding-requests
         // let tx = bitcoin_wallet.create_tx_singed_fund(
@@ -502,7 +500,6 @@ impl TryFrom<Config> for StacksCoordinator {
         // println!("tx fund is: {:?}", &tx);
 
         // local_bitcoin_node.load_wallet(bitcoin_wallet.address())?;
-
 
         let local_fee_wallet = WrapPegWallet {
             bitcoin_wallet,
@@ -563,14 +560,13 @@ impl Coordinator for StacksCoordinator {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Config;
+    use crate::coordinator::{CoordinatorHelpers, StacksCoordinator};
+    use crate::stacks_node::PegOutRequestOp;
     use bitcoin::consensus::Encodable;
     use blockstack_lib::burnchains::Txid;
     use blockstack_lib::chainstate::stacks::address::{PoxAddress, PoxAddressType20};
     use blockstack_lib::types::chainstate::BurnchainHeaderHash;
-
-    use crate::config::Config;
-    use crate::coordinator::{CoordinatorHelpers, StacksCoordinator};
-    use crate::stacks_node::PegOutRequestOp;
 
     #[ignore]
     #[test]

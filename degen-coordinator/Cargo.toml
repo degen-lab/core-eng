@@ -1,6 +1,9 @@
 [package]
 name = "degen-coordinator"
 version = "0.1.0"
+license = "GPLv3"
+homepage = "https://github.com/stacksdegens/core-eng"
+repository = "https://github.com/stacksdegens/core-eng"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -8,7 +8,7 @@ use bitcoin::{
 use rusqlite::types::Type::Integer;
 use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
-use tracing::{debug, warn};
+use tracing::{debug, warn, info};
 
 pub trait BitcoinNode {
     /// Broadcast the BTC transaction to the bitcoin node
@@ -95,10 +95,10 @@ impl BitcoinNode for LocalhostBitcoinNode {
     }
 
     fn load_wallet(&self, address: &BitcoinAddress) -> Result<(), Error> {
-        let wallet_name: &str = "muffy.dat";
-        let result = self.create_empty_wallet(wallet_name);
+
+        let result = self.create_empty_wallet();
         if let Err(Error::RPCError(message)) = &result {
-            if !message.ends_with("Database already exists.") {
+            if !message.ends_with("Database already exists.\"") {
                 return result;
             }
             // If the database already exists, no problem. Just emit a warning.
@@ -142,7 +142,7 @@ impl LocalhostBitcoinNode {
         Self { bitcoind_api }
     }
 
-    /// Make the Bitcoin RPC method call with the corresponding parameters
+    /// Make the Bitcoin RPC method call with the corresponding paramenters
     fn call(
         &self,
         method: &str,
@@ -185,13 +185,13 @@ impl LocalhostBitcoinNode {
         // Ok(json_result)
     }
 
-    fn create_empty_wallet(&self, wallet_name: &str) -> Result<(), Error> {
+    fn create_empty_wallet(&self) -> Result<(), Error> {
         // TODO: degens - check if we want a legacy wallet or a normal one
         // legacy wallet can't import taproot addresses
         // normal wallet can't import addresses, but can import descriptors
-        let wallet_name = wallet_name; //"degen_wallet";
+        let wallet_name = "";
         let disable_private_keys = false;
-        let blank = true; // how to have no HD seed
+        let blank = true;
         // TODO: degens - try to keep blank=true, change descriptors=true and import p2tr_address
         let passphrase = "";
         let avoid_reuse = false;
