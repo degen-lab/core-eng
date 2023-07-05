@@ -1,0 +1,8 @@
+sbtc_contract = "SP2BJA4JYFJ7SDMNFJZ9TJ3GB80P9Z80ADPGK1C2F.sbtc-alpha"
+stacks_private_key = ""
+stacks_node_rpc_url = "http://localhost:20443"
+bitcoin_node_rpc_url = "http://abcd:abcd@localhost:18445"
+frost_dkg_round_id = 0
+signer_config_path = ""
+network_private_key = ""
+transaction_fee = 2000

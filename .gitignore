@@ -6,3 +6,5 @@ Cargo.lock
 cobertura.xml
 tarpaulin-report.html
 *~
+.idea
+.DS_Store
