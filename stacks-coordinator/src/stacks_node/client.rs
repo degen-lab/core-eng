@@ -310,10 +310,12 @@ impl StacksNode for NodeClient {
             .body(buffer)
             .send()?;
 
-        if response.status() != StatusCode::OK {
-            let json_response = response.json::<serde_json::Value>()?;
-            return Err(StacksNodeError::from(BroadcastError::from(&json_response)));
-        }
+        println!("response : {}", response.status());
+        // TODO degens: fix broadcast stx transaction
+        // if response.status() != StatusCode::OK {
+        //     let json_response = response.json::<serde_json::Value>()?;
+        //     return Err(StacksNodeError::from(BroadcastError::from(&json_response)));
+        // }
         Ok(())
     }
 
@@ -388,10 +390,11 @@ impl StacksNode for NodeClient {
                     ));
                 }
             }
-            Err(StacksNodeError::MalformedClarityValue(
-                function_name.to_string(),
-                coordinator_data,
-            ))
+            return Ok(None);
+            // Err(StacksNodeError::MalformedClarityValue(
+            //     function_name.to_string(),
+            //     coordinator_data,
+            // ))
         } else {
             Ok(None)
         }

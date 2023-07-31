@@ -17,10 +17,10 @@ plan:
             path: "./.cache/requirements/SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.clar"
             clarity-version: 1
         - contract-publish:
-            contract-name: sbtc-token-key-admin
+            contract-name: sbtc-alpha
             expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            cost: 48140
-            path: contracts/sbtc-token-key-admin.clar
+            cost: 48850
+            path: contracts/sbtc-alpha.clar
             anchor-block-only: true
             clarity-version: 1
       epoch: "2.0"
