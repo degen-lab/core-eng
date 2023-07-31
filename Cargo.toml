@@ -11,7 +11,12 @@ members = [
   "stacks-doctor",
   "test-utils",
   "test-vectors",
-  "yarpc"]
+  "yarpc",
+  "degen-base-coordinator",
+  "degen-base-signer",
+  "degen-superior-coordinator",
+  "degen-superior-signer",
+]
 
 [workspace.dependencies]
 anyhow = "1.0"
