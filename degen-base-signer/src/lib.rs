@@ -12,6 +12,7 @@ pub mod stacks_node;
 pub mod peg_wallet;
 pub mod peg_queue;
 pub mod util_versioning;
+pub mod bitcoin_scripting;
 
 
 // set via _compile-time_ envars

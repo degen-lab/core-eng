@@ -143,6 +143,8 @@ pub enum MessageTypes {
     NonceResponse(NonceResponse),
     SignShareRequest(SignatureShareRequest),
     SignShareResponse(SignatureShareResponse),
+    DegensCreateScripts(DegensScript),
+    DegensSpendScripts(DegensSpendScript),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -307,6 +309,34 @@ impl Signable for SignatureShareResponse {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DegensScript {
+    pub dkg_id: u64,
+}
+
+impl Signable for DegensScript {
+    fn hash(&self, hasher: &mut Sha256) {
+        hasher.update("DEGENS_SCRIPT".as_bytes());
+        hasher.update(self.dkg_id.to_be_bytes());
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DegensSpendScript {
+    pub dkg_id: u64,
+    pub addresses: Vec<String>, // TODO degens: update to address type/alias
+}
+
+impl Signable for DegensSpendScript {
+    fn hash(&self, hasher: &mut Sha256) {
+        hasher.update("DEGENS_SCRIPT".as_bytes());
+        hasher.update(self.dkg_id.to_be_bytes());
+        for address in &self.addresses {
+            hasher.update(address.as_bytes());
+        }
+    }
+}
+
 impl SigningRound {
     pub fn new(
         threshold: u32,
@@ -365,7 +395,13 @@ impl SigningRound {
             MessageTypes::SignShareRequest(sign_share_request) => {
                 self.sign_share_request(sign_share_request)
             }
-            MessageTypes::NonceRequest(nonce_request) => self.nonce_request(nonce_request),
+            MessageTypes::NonceRequest(nonce_request) => {
+                self.nonce_request(nonce_request)
+            }
+            MessageTypes::DegensCreateScripts(degens_create_script) => {
+                self.degen_create_script(degens_create_script)
+            }
+
             _ => Ok(vec![]), // TODO
         };
 
@@ -704,6 +740,24 @@ impl SigningRound {
         );
         Ok(vec![])
     }
+
+    fn degen_create_script(&mut self, degens_create_script: DegensScript) -> Result<Vec<MessageTypes>, Error> {
+        // create script
+        // here should be the creation of bitcoin script
+
+        // send funds to script
+        // my private key to spend through it
+        // my address
+
+
+        // retrieve script address/public key
+
+
+        // how do we want to return the addresses? change type? all functions have this return type
+        Ok(vec![])
+    }
+
+
 }
 
 impl From<&FrostSigner> for SigningRound {

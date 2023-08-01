@@ -20,6 +20,7 @@ use wsts::{
     errors::AggregatorError,
     v1, Point, Scalar,
 };
+use degen_base_signer::signing_round::DegensScript;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -47,6 +48,8 @@ pub enum Command {
     Sign { msg: Vec<u8> },
     DkgSign { msg: Vec<u8> },
     GetAggregatePublicKey,
+    CreateScripts,
+    SpendScripts, // TODO degens: has to sign the msg as in Sign and DkgSign
 }
 
 pub struct Coordinator<Network: NetListen> {
@@ -134,6 +137,16 @@ where
                 info!("aggregate public key {}", key);
                 Ok(())
             }
+            Command::CreateScripts => {
+                info!("create scripts and fund them by signers");
+                self.start_create_scripts()?;
+                Ok(())
+            }
+            Command::SpendScripts => {
+                info!("spend scripts");
+                // self.
+                Ok(())
+            }
         }
     }
 
@@ -145,6 +158,22 @@ where
         self.start_private_shares()?;
         self.wait_for_dkg_end()?;
         Ok(public_key)
+    }
+
+    pub fn start_create_scripts(&mut self) -> Result<(), Error> {
+        // things to be done by coordinator
+        let create_script = DegensScript {
+            dkg_id: self.current_dkg_id,
+        };
+
+        let create_scripts_message = Message {
+            sig: create_script.sign(&self.network_private_key).expect(""),
+            msg: MessageTypes::DegensCreateScripts(create_script),
+        };
+
+        // propagate the action to signers
+        self.network.send_message(create_scripts_message)?;
+        Ok(())
     }
 
     fn start_public_shares(&mut self) -> Result<(), Error> {
