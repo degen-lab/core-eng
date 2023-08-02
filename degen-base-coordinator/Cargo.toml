@@ -10,6 +10,7 @@ edition = "2021"
 
 [dependencies]
 p256k1 = { workspace = true }
+blockstack-core = { workspace = true }
 wsts = { workspace = true }
 backoff = { workspace = true }
 clap = { workspace = true }
@@ -20,6 +21,7 @@ tracing-subscriber = { workspace = true }
 degen-base-signer = { path = "../degen-base-signer" }
 serde = { version = "1.0", features = ["serde_derive"] }
 bitcoin.workspace = true
+url = { workspace = true }
 
 [dev-dependencies]
 rand_core = { workspace = true }

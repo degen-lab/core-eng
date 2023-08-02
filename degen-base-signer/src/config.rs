@@ -152,10 +152,6 @@ impl RawConfig {
         .ok_or(Error::InvalidStacksPrivateKey(
             "Failed to generate stacks address from private key".to_string(),
         ))?;
-        // let sender_key = StacksPrivateKey::new();
-        // let address = StacksAddress::new(
-        //
-        // )
 
         Ok((sender_key, address))
     }
