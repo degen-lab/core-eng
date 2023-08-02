@@ -695,13 +695,11 @@ mod test {
         let coordinator_public_key = ecdsa::PublicKey::new(&coordinator_private_key).unwrap();
         let signer_private_keys = (0..num_signers)
             .map(|_| Scalar::random(&mut rng))
-            .collect::<Vec<Scalar>>(); // can't use this to get stacks_address
+            .collect::<Vec<Scalar>>();
         let signer_key_ids = (0..num_signers)
             .map(|i| (i + 1, create_signer_key_ids(i, keys_per_signer)))
             .collect::<SignerKeyIds>();
         let public_keys = create_public_keys(&signer_private_keys, keys_per_signer);
-
-        // placeholder values for test
         let stacks_private_key_str =  "7287ba251d44a4d3fd9276c88ce34c5c52a038955511cccaf77e61068649c17801";
         let (stacks_private_key, stacks_address) = parse_stacks_private_key(stacks_private_key_str.to_string(), NetworkVersion::Regtest)
             .unwrap();
