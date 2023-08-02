@@ -1,6 +1,8 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::time::Duration;
+use bitcoin::Address;
+use blockstack_lib::burnchains::bitcoin::address::BitcoinAddress;
 
 use degen_base_signer::config::{Config, Error as ConfigError};
 use degen_base_signer::{
@@ -20,7 +22,7 @@ use wsts::{
     errors::AggregatorError,
     v1, Point, Scalar,
 };
-use degen_base_signer::signing_round::DegensScript;
+use degen_base_signer::signing_round::DegensScriptRequest;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -68,6 +70,8 @@ pub struct Coordinator<Network: NetListen> {
     aggregate_public_key: Point,
     network_private_key: Scalar,
     public_key: PublicKey,
+    // from user public key to script bitcoin address
+    script_addresses: BTreeMap<PublicKey, BitcoinAddress>,
 }
 
 impl<Network: NetListen> Coordinator<Network> {
@@ -88,6 +92,7 @@ impl<Network: NetListen> Coordinator<Network> {
             signature_shares: Default::default(),
             network_private_key: config.network_private_key,
             public_key: config.coordinator_public_key,
+            script_addresses: Default::default(),
         })
     }
 
@@ -139,7 +144,7 @@ where
             }
             Command::CreateScripts => {
                 info!("create scripts and fund them by signers");
-                self.start_create_scripts()?;
+                self.run_create_scripts_generation()?;
                 Ok(())
             }
             Command::SpendScripts => {
@@ -160,20 +165,34 @@ where
         Ok(public_key)
     }
 
-    pub fn start_create_scripts(&mut self) -> Result<(), Error> {
-        // things to be done by coordinator
-        let create_script = DegensScript {
+    fn start_scripts(&mut self) -> Result<(), Error> {
+        let create_script = DegensScriptRequest {
             dkg_id: self.current_dkg_id,
         };
-
         let create_scripts_message = Message {
             sig: create_script.sign(&self.network_private_key).expect(""),
-            msg: MessageTypes::DegensCreateScripts(create_script),
+            msg: MessageTypes::DegensCreateScriptsRequest(create_script),
         };
-
-        // propagate the action to signers
         self.network.send_message(create_scripts_message)?;
         Ok(())
+    }
+
+    fn wait_for_create_scripts(&mut self) -> Result<Vec<Address>, Error> {
+        // wait for the response from signers
+
+        // insert each key to the corresponding signer based on his public key
+        Ok(vec![])
+    }
+
+    pub fn run_create_scripts_generation(&mut self) -> Result<Vec<Address>, Error> {
+        // things to be done by coordinator
+        info!("Starting to create scripts");
+        self.start_scripts();
+
+
+        let addresses = self.wait_for_create_scripts().unwrap();
+        // populate this
+        Ok(vec![])
     }
 
     fn start_public_shares(&mut self) -> Result<(), Error> {

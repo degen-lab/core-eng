@@ -81,9 +81,13 @@ impl Signer {
                             .sign(&network_private_key)
                             .expect("failed to sign SignShareResponse")
                             .to_vec(),
-                        MessageTypes::DegensCreateScripts(msg) => msg
+                        MessageTypes::DegensCreateScriptsRequest(msg) => msg
                             .sign(&network_private_key)
-                            .expect("failed to sign DegensCreateScripts")
+                            .expect("failed to sign DegensCreateScriptsRequest")
+                            .to_vec(),
+                        MessageTypes::DegensCreateScriptsResponse(msg) => msg
+                            .sign(&network_private_key)
+                            .expect("failed to sign DegensCreateScriptsResponse")
                             .to_vec(),
                         MessageTypes::DegensSpendScripts(msg) => msg
                             .sign(&network_private_key)
@@ -253,9 +257,15 @@ fn verify_msg(
                 return false;
             }
         }
-        MessageTypes::DegensCreateScripts(msg) => {
+        MessageTypes::DegensCreateScriptsRequest(msg) => {
             if !msg.verify(&m.sig, coordinator_public_key) {
-                warn!("Received a DegensCreateScripts message with an invalid signature.");
+                warn!("Received a DegensCreateScriptsRequest message with an invalid signature.");
+                return false;
+            }
+        }
+        MessageTypes::DegensCreateScriptsResponse(msg) => {
+            if !msg.verify(&m.sig, coordinator_public_key) {
+                warn!("Received a DegensCreateScriptsResponse message with an invalid signature.");
                 return false;
             }
         }
