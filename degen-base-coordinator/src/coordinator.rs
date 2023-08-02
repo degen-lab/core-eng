@@ -695,7 +695,7 @@ mod test {
         let coordinator_public_key = ecdsa::PublicKey::new(&coordinator_private_key).unwrap();
         let signer_private_keys = (0..num_signers)
             .map(|_| Scalar::random(&mut rng))
-            .collect::<Vec<Scalar>>();
+            .collect::<Vec<Scalar>>(); // can't use this to get stacks_address
         let signer_key_ids = (0..num_signers)
             .map(|i| (i + 1, create_signer_key_ids(i, keys_per_signer)))
             .collect::<SignerKeyIds>();
@@ -735,6 +735,10 @@ mod test {
         let signer_configs = signer_private_keys
             .iter()
             .map(|k| {
+                let (stacks_private_key, stacks_address) = parse_stacks_private_key(
+                    StacksPrivateKey::new().to_hex(),
+                    NetworkVersion::Regtest
+                    ).unwrap();
                 Config::new(
                     stacks_private_key,
                     stacks_address,
