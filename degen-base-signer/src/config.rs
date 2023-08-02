@@ -6,9 +6,21 @@ use p256k1::{
 };
 use serde::Deserialize;
 use std::fs;
+use std::str::FromStr;
+use bincode::config;
+use bitcoin::{KeyPair, XOnlyPublicKey};
+use bitcoin::secp256k1::{Secp256k1, SecretKey};
+use blockstack_lib::address::AddressHashMode;
+use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
+use blockstack_lib::types::chainstate::{StacksAddress, StacksPublicKey};
 use toml;
+use url::Url;
+
+// import type Bitcoin PrivateKey
+// import type Bitcoin xOnlyPubKey and address
 
 use crate::util::parse_public_key;
+use crate::util_versioning::address_version;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -19,9 +31,15 @@ pub enum Error {
     #[error("Invalid Public Key: {0}")]
     InvalidPublicKey(ECDSAError),
     #[error("Failed to parse network_private_key: {0}")]
-    InvalidPrivateKey(ScalarError),
+    InvalidNetworkPrivateKey(ScalarError),
     #[error("Invalid Key ID. Must specify Key IDs greater than 0.")]
     InvalidKeyID,
+    #[error("Failed to parse stacks_private_key: {0}")]
+    InvalidStacksPrivateKey(String),
+    #[error("Failed to parse bitcoin_private_key: {0}")]
+    InvalidBitcoinPrivateKey(String),
+    #[error("Invalid config url. {0}")]
+    InvalidConfigUrl(String),
 }
 
 #[derive(Parser)]
@@ -51,7 +69,23 @@ struct RawSigners {
 }
 
 #[derive(Clone, Deserialize, Default, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum Network {
+    Mainnet,
+    Testnet,
+    #[default]
+    Regtest,
+}
+
+#[derive(Clone, Deserialize, Default, Debug)]
 struct RawConfig {
+    pub stacks_private_key: String,
+    pub stacks_node_rpc_url: String,
+    pub bitcoin_private_key: String,
+    pub bitcoin_node_rpc_url: String,
+    /// The transaction fee in Satoshis used to broadcast transactions to the stacks node
+    pub transaction_fee: u64,
+    pub network: Network,
     pub http_relay_url: String,
     pub keys_threshold: u32,
     pub network_private_key: String,
@@ -100,8 +134,49 @@ impl RawConfig {
 
     pub fn network_private_key(&self) -> Result<Scalar, Error> {
         let network_private_key = Scalar::try_from(self.network_private_key.as_str())
-            .map_err(Error::InvalidPrivateKey)?;
+            .map_err(Error::InvalidNetworkPrivateKey)?;
         Ok(network_private_key)
+    }
+
+    pub fn parse_stacks_private_key(&self) -> Result<(StacksPrivateKey, StacksAddress), Error> {
+        let sender_key = StacksPrivateKey::from_hex(&self.stacks_private_key)
+            .map_err(|e| Error::InvalidStacksPrivateKey(e.to_string()))?;
+        let pk = StacksPublicKey::from_private(&sender_key);
+
+        let address = StacksAddress::from_public_keys(
+            address_version(&self.parse_version().0),
+            &AddressHashMode::SerializeP2PKH,
+            1,
+            &vec![pk],
+        )
+        .ok_or(Error::InvalidStacksPrivateKey(
+            "Failed to generate stacks address from private key".to_string(),
+        ))?;
+        // let sender_key = StacksPrivateKey::new();
+        // let address = StacksAddress::new(
+        //
+        // )
+
+        Ok((sender_key, address))
+    }
+
+    pub fn parse_bitcoin_private_key(&self) -> Result<(SecretKey, XOnlyPublicKey), Error> {
+        let secp = Secp256k1::new();
+        let sender_key = SecretKey::from_str(&self.bitcoin_private_key)
+            .map_err(|e| Error::InvalidBitcoinPrivateKey(e.to_string()))?;
+        let key_pair_source = KeyPair::from_secret_key(&secp, &sender_key);
+        let (xonly_public_key, _) = key_pair_source.x_only_public_key();
+
+        Ok((sender_key, xonly_public_key))
+    }
+
+    pub fn parse_version(&self) -> (TransactionVersion, bitcoin::Network) {
+        // Determine what network we are running on
+        match self.network {
+            Network::Mainnet => (TransactionVersion::Mainnet, bitcoin::Network::Bitcoin),
+            Network::Testnet => (TransactionVersion::Testnet, bitcoin::Network::Testnet),
+            Network::Regtest => (TransactionVersion::Testnet, bitcoin::Network::Regtest),
+        }
     }
 }
 
@@ -113,6 +188,15 @@ pub struct PublicKeys {
 
 #[derive(Clone, Debug)]
 pub struct Config {
+    pub stacks_private_key: StacksPrivateKey,
+    pub stacks_address: StacksAddress,
+    pub stacks_node_rpc_url: Url,
+    pub stacks_version: TransactionVersion,
+    pub bitcoin_private_key: SecretKey,
+    pub bitcoin_xonly_public_key: XOnlyPublicKey,
+    pub bitcoin_node_rpc_url: Url,
+    pub transaction_fee: u64,
+    pub bitcoin_network: bitcoin::Network,
     pub http_relay_url: String,
     pub keys_threshold: u32,
     pub network_private_key: Scalar,
@@ -125,6 +209,15 @@ pub struct Config {
 
 impl Config {
     pub fn new(
+        stacks_private_key: StacksPrivateKey,
+        stacks_address: StacksAddress,
+        stacks_node_rpc_url: Url,
+        stacks_version: TransactionVersion,
+        bitcoin_private_key: SecretKey,
+        bitcoin_xonly_public_key: XOnlyPublicKey,
+        bitcoin_node_rpc_url: Url,
+        transaction_fee: u64,
+        bitcoin_network: bitcoin::Network,
         keys_threshold: u32,
         coordinator_public_key: ecdsa::PublicKey,
         public_keys: PublicKeys,
@@ -133,6 +226,15 @@ impl Config {
         http_relay_url: String,
     ) -> Config {
         Self {
+            stacks_private_key,
+            stacks_address,
+            stacks_node_rpc_url,
+            stacks_version,
+            bitcoin_private_key,
+            bitcoin_xonly_public_key,
+            bitcoin_node_rpc_url,
+            transaction_fee,
+            bitcoin_network,
             keys_threshold,
             coordinator_public_key,
             network_private_key,
@@ -153,7 +255,26 @@ impl Config {
 impl TryFrom<&RawConfig> for Config {
     type Error = Error;
     fn try_from(raw_config: &RawConfig) -> Result<Self, Error> {
+        let (stacks_private_key, stacks_address) = raw_config.parse_stacks_private_key()?;
+        let (bitcoin_private_key, bitcoin_xonly_public_key) = raw_config.parse_bitcoin_private_key()?;
+        let (stacks_version, bitcoin_network) = raw_config.parse_version();
+
         Ok(Config::new(
+            stacks_private_key,
+            stacks_address,
+            Url::parse(raw_config.stacks_node_rpc_url.as_str())
+                .map_err(|e|
+                    Error::InvalidConfigUrl(format!("Invalid stacks_node_rpc_url: {}", e))
+                )?,
+            stacks_version,
+            bitcoin_private_key,
+            bitcoin_xonly_public_key,
+            Url::parse(raw_config.bitcoin_node_rpc_url.as_str())
+                .map_err(|e|
+                    Error::InvalidConfigUrl(format!("Invalid bitcoin_node_rpc_url: {}", e))
+                )?,
+            raw_config.transaction_fee,
+            bitcoin_network,
             raw_config.keys_threshold,
             raw_config.coordinator_public_key()?,
             raw_config.public_keys()?,
@@ -182,7 +303,7 @@ mod test {
             "22Rm48xUdpuTuva5gz9S7yDaaw9f8sjMcPSTHYVzPLNcj".to_string();
         assert!(matches!(
             Config::try_from(&raw_config),
-            Err(Error::InvalidPrivateKey(_))
+            Err(Error::InvalidNetworkPrivateKey(_))
         ));
 
         raw_config.network_private_key = "9aSCCR6eirt1NAHwJtSz4HMwBHTyMo62SyPMvVDt5DQn".to_string();
@@ -261,4 +382,33 @@ mod test {
         assert_eq!(public_keys.signers.len(), 2);
         assert_eq!(public_keys.key_ids.len(), 4);
     }
+
+    // test private keys stacks and bitcoin
+    #[test]
+    fn parse_stacks_private_key_test() {
+        let mut config = RawConfig::default();
+        // An empty private key should fail
+        assert!(matches!(
+            config.parse_stacks_private_key(),
+            Err(Error::InvalidStacksPrivateKey(_))
+        ));
+
+        // An invalid key shoudl fail
+        config.stacks_private_key = "This is an invalid private key...".to_string();
+        assert!(matches!(
+            config.parse_stacks_private_key(),
+            Err(Error::InvalidStacksPrivateKey(_))
+        ));
+
+        // A valid key should succeed
+        config.stacks_private_key =
+            "d655b2523bcd65e34889725c73064feb17ceb796831c0e111ba1a552b0f31b3901".to_string();
+        assert_eq!(
+            config.parse_stacks_private_key().unwrap().0.to_hex(),
+            config.stacks_private_key
+        );
+    }
+
+
+
 }

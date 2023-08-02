@@ -186,7 +186,7 @@ mod tests {
     use super::{BitcoinWallet, Error};
     use crate::bitcoin_node::UTXO;
     use crate::peg_wallet::{BitcoinWallet as BitcoinWalletTrait, Error as PegWalletError};
-    use crate::util::test::{build_peg_out_request_op, PRIVATE_KEY_HEX};
+    use crate::util_versioning::test::{build_peg_out_request_op, PRIVATE_KEY_HEX};
     use bitcoin::XOnlyPublicKey;
     use hex::encode;
     use rand::Rng;

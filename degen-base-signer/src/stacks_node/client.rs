@@ -450,7 +450,7 @@ mod tests {
         util::{hash::Hash160, secp256k1::MessageSignature},
     };
 
-    use crate::util::test::PRIVATE_KEY_HEX;
+    use crate::util_versioning::test::PRIVATE_KEY_HEX;
 
     use super::*;
 

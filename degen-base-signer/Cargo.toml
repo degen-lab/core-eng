@@ -22,6 +22,7 @@ p256k1 = { workspace = true }
 wsts = { workspace = true }
 hashbrown = { workspace = true }
 itertools = { workspace = true }
+mockall = "0.11.3"
 rand_core = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }

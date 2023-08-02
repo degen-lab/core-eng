@@ -24,8 +24,6 @@ pub mod test {
         util::{hash::Sha256Sum, secp256k1::Secp256k1PrivateKey},
     };
     use rand::Rng;
-    use degen_base_signer::bitcoin_node::BitcoinTransaction;
-    use degen_base_signer::stacks_node::PegOutRequestOp;
 
     pub const PRIVATE_KEY_HEX: &str =
         "b244296d5907de9864c0b0d51f98a13c52890be0404e83f273144cd5b9960eed01";

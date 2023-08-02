@@ -19,6 +19,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 degen-base-signer = { path = "../degen-base-signer" }
 serde = { version = "1.0", features = ["serde_derive"] }
+bitcoin.workspace = true
 
 [dev-dependencies]
 rand_core = { workspace = true }

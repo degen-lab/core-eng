@@ -1,3 +1,6 @@
+use std::str::FromStr;
+use bitcoin::secp256k1::{Secp256k1, SecretKey};
+use bitcoin::{KeyPair, XOnlyPublicKey};
 use blockstack_lib::{
     address::AddressHashMode,
     burnchains::Address,
@@ -25,6 +28,8 @@ pub enum Error {
     InvalidContract(String),
     #[error("Failed to parse stacks_private_key: {0}")]
     InvalidPrivateKey(String),
+    #[error("Failed to parse bitcoin_private_key: {0}")]
+    InvalidBitcoinPrivateKey(String),
 }
 
 #[derive(serde::Deserialize)]
@@ -40,6 +45,7 @@ pub struct RawConfig {
     pub stacks_private_key: String,
     pub stacks_node_rpc_url: String,
     pub bitcoin_node_rpc_url: String,
+    pub bitcoin_private_key: String,
     pub frost_dkg_round_id: u64,
     pub signer_config_path: Option<String>,
     pub start_block_height: Option<u64>,
@@ -62,6 +68,7 @@ impl RawConfig {
         Ok(config)
     }
 
+    // TODO will use: implement this when necessary
     pub fn parse_contract(&self) -> Result<(ContractName, StacksAddress), Error> {
         let mut split = self.sbtc_contract.split('.');
         let contract_address = split
@@ -98,6 +105,16 @@ impl RawConfig {
         Ok((sender_key, address))
     }
 
+    pub fn parse_bitcoin_private_key(&self) -> Result<(SecretKey, XOnlyPublicKey), Error> {
+        let secp = Secp256k1::new();
+        let sender_key = SecretKey::from_str(&self.bitcoin_private_key)
+            .map_err(|e| Error::InvalidBitcoinPrivateKey(e.to_string()))?;
+        let key_pair_source = KeyPair::from_secret_key(&secp, &sender_key);
+        let (xonly_public_key, _) = key_pair_source.x_only_public_key();
+
+        Ok((sender_key, xonly_public_key))
+    }
+
     pub fn parse_version(&self) -> (TransactionVersion, bitcoin::Network) {
         // Determine what network we are running on
         match self.network.as_ref().unwrap_or(&Network::Mainnet) {
@@ -114,6 +131,8 @@ pub struct Config {
     pub stacks_address: StacksAddress,
     pub stacks_node_rpc_url: Url,
     pub bitcoin_node_rpc_url: Url,
+    pub bitcoin_private_key: SecretKey,
+    pub bitcoin_xpub: XOnlyPublicKey,
     pub frost_dkg_round_id: u64,
     pub signer_config_path: Option<String>,
     pub start_block_height: Option<u64>,
@@ -154,6 +173,7 @@ impl TryFrom<RawConfig> for Config {
         let (contract_name, contract_address) = config.parse_contract()?;
         let (stacks_version, bitcoin_network) = config.parse_version();
         let (stacks_private_key, stacks_address) = config.parse_stacks_private_key()?;
+        let (bitcoin_private_key, bitcoin_address) = config.parse_bitcoin_private_key()?;
 
         Ok(Self {
             contract_name,
@@ -165,6 +185,8 @@ impl TryFrom<RawConfig> for Config {
             bitcoin_node_rpc_url: Url::parse(&config.bitcoin_node_rpc_url).map_err(|e| {
                 Error::InvalidConfig(format!("Invalid bitcoin_node_rpc_url: {}", e))
             })?,
+            bitcoin_private_key,
+            bitcoin_xpub: bitcoin_address,
             frost_dkg_round_id: config.frost_dkg_round_id,
             signer_config_path: config.signer_config_path,
             start_block_height: config.start_block_height,

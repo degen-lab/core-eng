@@ -343,6 +343,15 @@ fn create_frost_coordinator_from_contract(
     .map_err(|_| Error::ConfigError("Invalid network_private_key.".to_string()))?;
     let http_relay_url = config.http_relay_url.clone().unwrap_or(String::new());
     create_coordinator(&SignerConfig::new(
+        config.stacks_private_key.clone(),
+        config.stacks_address.clone(),
+        config.stacks_node_rpc_url.clone(),
+        config.stacks_version.clone(),
+        config.bitcoin_private_key.clone(),
+        config.bitcoin_xpub.clone(),
+        config.bitcoin_node_rpc_url.clone(),
+        config.transaction_fee.clone(),
+        config.bitcoin_network.clone(),
         keys_threshold.try_into().unwrap(),
         coordinator_public_key,
         public_keys,

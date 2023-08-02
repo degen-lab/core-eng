@@ -16,8 +16,6 @@ signers =  [
 coordinator_public_key = "22Rm48xUdpuTuva5gz9S7yDaaw9f8sjMcPSTHYVzPLNcj"
 
 # bad signature with this custom signer configs
-#http_relay_url = "http://localhost:9776"
-#keys_threshold = 4
 #frost_state_file = "frost.signer1.state.bin"
 #network_private_key = "GGJL5xL1o8U5TJNMtQiT8YK6sdYgpTrN1TZCeFrcYxeV"
 #signers =  [

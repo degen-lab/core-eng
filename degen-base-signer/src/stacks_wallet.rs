@@ -265,7 +265,7 @@ mod tests {
     use crate::{
         peg_wallet::StacksWallet as StacksWalletTrait,
         stacks_wallet::StacksWallet,
-        util::{
+        util_versioning::{
             address_version,
             test::{build_peg_out_request_op, PRIVATE_KEY_HEX, PUBLIC_KEY_HEX},
         },

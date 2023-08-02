@@ -1,4 +1,4 @@
-stacks_private_key = "7287ba251d44a4d3fd9276c88ce34c5c52a038955511cccaf77e61068649c17801"
+stacks_private_key = "d655b2523bcd65e34889725c73064feb17ceb796831c0e111ba1a552b0f31b3901"
 bitcoin_private_key = "2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90"
 stacks_node_rpc_url = "http://localhost:20443"
 bitcoin_node_rpc_url = "http://devnet:devnet@localhost:18443"
@@ -16,10 +16,8 @@ signers =  [
 coordinator_public_key = "22Rm48xUdpuTuva5gz9S7yDaaw9f8sjMcPSTHYVzPLNcj"
 
 # bad signature with this custom signer configs
-#http_relay_url = "http://localhost:9776"
-#keys_threshold = 4
-#frost_state_file = "frost.signer1.state.bin"
-#network_private_key = "GGJL5xL1o8U5TJNMtQiT8YK6sdYgpTrN1TZCeFrcYxeV"
+#frost_state_file = "frost.signer3.state.bin"
+#network_private_key = "hkBLK7JXHv14yCH7UDzx3bxaur9ixPFopmdLRvfP4Kr"
 #signers =  [
 #    {public_key = "xvwd4f8L4oAmAXNhqMvQvbMiniCSeNH1rD9ZwCEEf7b6", key_ids = [1, 2]},
 #    {public_key = "cLuu4PSQLxi6bjFYGyTvyAFRUe3XfJL8mQ99Bd9A8mv9", key_ids = [3, 4]},
