@@ -7,6 +7,8 @@ pub enum States {
     DkgPrivateGather,
     SignGather,
     Signed,
+    DegensScriptGather,
+    DegensScriptDistribute,
 }
 
 pub trait StateMachine {

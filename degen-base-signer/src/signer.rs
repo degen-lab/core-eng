@@ -42,7 +42,7 @@ impl Signer {
         let network_private_key = self.config.network_private_key;
         let mut round = SigningRound::from(self);
         loop {
-            // Retreive a message from coordinator
+            // Retrieve a message from coordinator
             let inbound = rx.recv()?; // blocking
             let outbounds = round.process(inbound.msg)?;
             for out in outbounds {
