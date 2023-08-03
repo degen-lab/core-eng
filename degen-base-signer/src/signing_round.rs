@@ -8,7 +8,16 @@ use rand_core::{CryptoRng, OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::str::FromStr;
+use bdk::Error::Secp256k1;
+use bitcoin::{Network, PrivateKey, PublicKey, XOnlyPublicKey};
+use bitcoin::secp256k1::SecretKey;
+use blockstack_lib::burnchains::bitcoin::address::BitcoinAddress;
+use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
+use blockstack_lib::types::chainstate::StacksAddress;
+use blockstack_lib::util::hash::Hash160;
 use tracing::{debug, info, warn};
+use url::Url;
 pub use wsts;
 use wsts::{
     common::{PolyCommitment, PublicNonce, SignatureShare},
@@ -84,6 +93,19 @@ pub struct SigningRound {
     pub public_nonces: Vec<PublicNonce>,
     pub network_private_key: Scalar,
     pub public_keys: PublicKeys,
+    // TODO: should be encrypted, i guess?
+    pub stacks_private_key: StacksPrivateKey,
+    pub stacks_address: StacksAddress,
+    pub stacks_node_rpc_url: Url,
+    pub stacks_version: TransactionVersion,
+    pub bitcoin_private_key: SecretKey,
+    pub bitcoin_xonly_public_key: XOnlyPublicKey,
+    pub bitcoin_node_rpc_url: Url,
+    pub transaction_fee: u64,
+    pub bitcoin_network: bitcoin::Network,
+
+    pub script_addresses: BTreeMap<PublicKey, BitcoinAddress>,
+
 }
 
 pub struct Signer {
@@ -112,6 +134,9 @@ impl StateMachine for SigningRound {
             States::DkgPrivateGather => prev_state == &States::DkgPrivateDistribute,
             States::SignGather => prev_state == &States::Idle,
             States::Signed => prev_state == &States::SignGather,
+            States::DegensScriptDistribute => prev_state == &States::Idle,
+            States::DegensScriptGather => prev_state == &States::DegensScriptDistribute,
+            // TODO degens: add states for scripts
         };
         if accepted {
             info!("state change from {:?} to {:?}", prev_state, state);
@@ -143,7 +168,8 @@ pub enum MessageTypes {
     NonceResponse(NonceResponse),
     SignShareRequest(SignatureShareRequest),
     SignShareResponse(SignatureShareResponse),
-    DegensCreateScripts(DegensScript),
+    DegensCreateScriptsRequest(DegensScriptRequest),
+    DegensCreateScriptsResponse(DegensScriptResponse),
     DegensSpendScripts(DegensSpendScript),
 }
 
@@ -310,14 +336,32 @@ impl Signable for SignatureShareResponse {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct DegensScript {
+pub struct DegensScriptRequest {
     pub dkg_id: u64,
 }
 
-impl Signable for DegensScript {
+impl Signable for DegensScriptRequest {
     fn hash(&self, hasher: &mut Sha256) {
-        hasher.update("DEGENS_SCRIPT".as_bytes());
+        hasher.update("DEGENS_CREATE_SCRIPT_REQUEST".as_bytes());
         hasher.update(self.dkg_id.to_be_bytes());
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DegensScriptResponse {
+    pub dkg_id: u64,
+    pub public_key: XOnlyPublicKey,
+    pub script: BitcoinAddress,
+    pub block_height: u64,
+}
+
+impl Signable for DegensScriptResponse {
+    fn hash(&self, hasher: &mut Sha256) {
+        hasher.update("DEGENS_CREATE_SCRIPT_RESPONSE".as_bytes());
+        hasher.update(self.dkg_id.to_be_bytes());
+        hasher.update(self.public_key.to_string());
+        hasher.update(self.script.to_string()); // TODO: check if alright
+        hasher.update(self.block_height.to_be_bytes());
     }
 }
 
@@ -329,7 +373,7 @@ pub struct DegensSpendScript {
 
 impl Signable for DegensSpendScript {
     fn hash(&self, hasher: &mut Sha256) {
-        hasher.update("DEGENS_SCRIPT".as_bytes());
+        hasher.update("DEGENS_SPEND_SCRIPT".as_bytes());
         hasher.update(self.dkg_id.to_be_bytes());
         for address in &self.addresses {
             hasher.update(address.as_bytes());
@@ -370,6 +414,16 @@ impl SigningRound {
             public_nonces: vec![],
             network_private_key,
             public_keys,
+            stacks_private_key: StacksPrivateKey::new(),
+            stacks_address: StacksAddress::new(26, Hash160([0; 20]))  ,
+            stacks_node_rpc_url: Url::from_str("").unwrap(),
+            stacks_version: TransactionVersion::Testnet,
+            bitcoin_private_key: SecretKey::new(&mut rng),
+            bitcoin_xonly_public_key: SecretKey::new(&mut rng).x_only_public_key(Secp256k1::new()).0,
+            bitcoin_node_rpc_url: Url::from_str("").unwrap(),
+            transaction_fee: 0,
+            bitcoin_network: Network::Regtest,
+            script_addresses: BTreeMap::new(),
         }
     }
 
@@ -398,7 +452,7 @@ impl SigningRound {
             MessageTypes::NonceRequest(nonce_request) => {
                 self.nonce_request(nonce_request)
             }
-            MessageTypes::DegensCreateScripts(degens_create_script) => {
+            MessageTypes::DegensCreateScriptsRequest(degens_create_script) => {
                 self.degen_create_script(degens_create_script)
             }
 
@@ -741,9 +795,17 @@ impl SigningRound {
         Ok(vec![])
     }
 
-    fn degen_create_script(&mut self, degens_create_script: DegensScript) -> Result<Vec<MessageTypes>, Error> {
+    fn degen_create_script(&mut self, degens_create_script: DegensScriptRequest) -> Result<Vec<MessageTypes>, Error> {
         // create script
         // here should be the creation of bitcoin script
+
+
+
+        // call bitcoin_wallet to get block height
+        info!("Hello");
+
+        // TODO: how do we get the signers private key??
+        // first output configs private_KEY and public_key and check them
 
         // send funds to script
         // my private key to spend through it
@@ -763,6 +825,7 @@ impl SigningRound {
 impl From<&FrostSigner> for SigningRound {
     fn from(signer: &FrostSigner) -> Self {
         let signer_id = signer.signer_id;
+        let signer_private_key = signer.config.stacks_private_key;
         assert!(signer_id > 0 && signer_id <= signer.config.total_signers);
         let key_ids = signer.config.signer_key_ids[&signer_id]
             .iter()
@@ -800,6 +863,7 @@ impl From<&FrostSigner> for SigningRound {
             public_nonces: vec![],
             network_private_key,
             public_keys,
+            script_addresses: BTreeMap::new(),
         }
     }
 }
