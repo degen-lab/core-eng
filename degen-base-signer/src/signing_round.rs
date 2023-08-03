@@ -9,9 +9,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use bdk::Error::Secp256k1;
 use bitcoin::{Network, PrivateKey, PublicKey, XOnlyPublicKey};
-use bitcoin::secp256k1::SecretKey;
+use bitcoin::blockdata::opcodes::all;
+use bitcoin::blockdata::script::Builder;
+use bitcoin::secp256k1::{Secp256k1, SecretKey};
+use bitcoin::util::taproot;
 use blockstack_lib::burnchains::bitcoin::address::BitcoinAddress;
 use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
 use blockstack_lib::types::chainstate::StacksAddress;
@@ -24,6 +26,7 @@ use wsts::{
     traits::Signer as SignerTrait,
     v1,
 };
+use wsts::bip340::test_helpers::sign;
 
 use crate::{
     config::PublicKeys,
@@ -31,6 +34,7 @@ use crate::{
     state_machine::{Error as StateMachineError, StateMachine, States},
     util::{decrypt, encrypt, make_shared_secret},
 };
+use crate::bitcoin_scripting::{create_script_refund, create_script_unspendable, create_tree};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -419,7 +423,7 @@ impl SigningRound {
             stacks_node_rpc_url: Url::from_str("").unwrap(),
             stacks_version: TransactionVersion::Testnet,
             bitcoin_private_key: SecretKey::new(&mut rng),
-            bitcoin_xonly_public_key: SecretKey::new(&mut rng).x_only_public_key(Secp256k1::new()).0,
+            bitcoin_xonly_public_key: SecretKey::new(&mut rng).x_only_public_key(&Secp256k1::new()).0,
             bitcoin_node_rpc_url: Url::from_str("").unwrap(),
             transaction_fee: 0,
             bitcoin_network: Network::Regtest,
@@ -796,16 +800,20 @@ impl SigningRound {
     }
 
     fn degen_create_script(&mut self, degens_create_script: DegensScriptRequest) -> Result<Vec<MessageTypes>, Error> {
+        // TODO: call bitcoin_wallet to get block height
         // create script
         // here should be the creation of bitcoin script
+        let script_1 = create_script_refund(&self.bitcoin_xonly_public_key, 0);
+        let script_2 = create_script_unspendable();
 
+        let (tap_info, address) = create_tree(
+            &Secp256k1::new(),
+            self.bitcoin_xonly_public_key,
+            &script_1,
+            &script_2,
+        );
 
-
-        // call bitcoin_wallet to get block height
-        info!("Hello");
-
-        // TODO: how do we get the signers private key??
-        // first output configs private_KEY and public_key and check them
+        info!("tap info: {:#?}\naddress: {:#?}", tap_info, address);
 
         // send funds to script
         // my private key to spend through it
@@ -863,6 +871,15 @@ impl From<&FrostSigner> for SigningRound {
             public_nonces: vec![],
             network_private_key,
             public_keys,
+            stacks_private_key: signer.config.stacks_private_key,
+            stacks_address: signer.config.stacks_address,
+            stacks_node_rpc_url: signer.config.stacks_node_rpc_url.clone(),
+            stacks_version: signer.config.stacks_version,
+            bitcoin_private_key: signer.config.bitcoin_private_key,
+            bitcoin_xonly_public_key: signer.config.bitcoin_xonly_public_key,
+            bitcoin_node_rpc_url: signer.config.bitcoin_node_rpc_url.clone(),
+            transaction_fee: signer.config.transaction_fee,
+            bitcoin_network: signer.config.bitcoin_network,
             script_addresses: BTreeMap::new(),
         }
     }

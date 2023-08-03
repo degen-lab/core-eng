@@ -1,14 +1,14 @@
 use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::Builder;
 use bitcoin::secp256k1::{All, Secp256k1};
-use bitcoin::{Address, KeyPair, Network, Script, XOnlyPublicKey};
+use bitcoin::{Address, Network, Script, XOnlyPublicKey};
 use bitcoin::util::taproot;
 use crate::bitcoin_node::LocalhostBitcoinNode;
 
 pub fn create_script_refund(
     user_public_key: &XOnlyPublicKey,
     unlock_block: usize,
-) -> bitcoin::Script {
+) -> Script {
     Builder::new()
         .push_int(unlock_block as i64)
         .push_opcode(all::OP_CLTV)
@@ -18,29 +18,28 @@ pub fn create_script_refund(
         .into_script()
 }
 
-pub fn create_script_unspendable() -> bitcoin::Script {
+pub fn create_script_unspendable() -> Script {
     Builder::new().push_opcode(all::OP_RETURN).into_script()
 }
 
 
 pub fn create_tree(
     secp: &Secp256k1<All>,
-    key_pair_internal: &KeyPair,
+    internal_xonly_public_key: XOnlyPublicKey, // TODO: degens change to aggregate public key
     script_1: &Script,
     script_2: &Script,
-) -> (taproot::TaprootSpendInfo, bitcoin::Address) {
+) -> (taproot::TaprootSpendInfo, Address) {
     let builder = taproot::TaprootBuilder::with_huffman_tree(vec![
         (1, script_1.clone()),
         (1, script_2.clone()),
     ]).unwrap(); // TODO: degens - or use unwrap check it
 
-    let (internal_public_ley, _) = key_pair_internal.x_only_public_key();
-    let tap_info = builder.finalize(secp, internal_public_ley).unwrap();
+    let tap_info = builder.finalize(secp, internal_xonly_public_key).unwrap();
     let address = Address::p2tr(
         secp,
         tap_info.internal_key(),
         tap_info.merkle_root(),
-        Network::Testnet,
+        Network::Regtest,
     );
 
     (tap_info, address)
