@@ -9,6 +9,11 @@ use blockstack_lib::{
     vm::ContractName,
 };
 use url::Url;
+use degen_base_signer::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode};
+use degen_base_signer::bitcoin_wallet::BitcoinWallet;
+use degen_base_signer::peg_wallet::BitcoinWallet as BitcoinWalletTrait;
+use degen_base_signer::stacks_node::client::NodeClient;
+use degen_base_signer::stacks_wallet::StacksWallet;
 
 use crate::util::address_version;
 
@@ -131,6 +136,10 @@ pub struct Config {
     pub stacks_address: StacksAddress,
     pub stacks_node_rpc_url: Url,
     pub bitcoin_node_rpc_url: Url,
+    pub local_stacks_node: NodeClient,
+    pub stacks_wallet: StacksWallet,
+    pub local_bitcoin_node: LocalhostBitcoinNode,
+    pub bitcoin_wallet: BitcoinWallet,
     pub bitcoin_private_key: SecretKey,
     pub bitcoin_xpub: XOnlyPublicKey,
     pub frost_dkg_round_id: u64,
@@ -175,16 +184,43 @@ impl TryFrom<RawConfig> for Config {
         let (stacks_private_key, stacks_address) = config.parse_stacks_private_key()?;
         let (bitcoin_private_key, bitcoin_address) = config.parse_bitcoin_private_key()?;
 
+        let stacks_node_rpc_url = Url::parse(&config.stacks_node_rpc_url)
+            .map_err(|e| Error::InvalidConfig(format!("Invalid stacks_node_rpc_url: {}", e)))?;
+
+        let bitcoin_node_rpc_url = Url::parse(&config.bitcoin_node_rpc_url)
+            .map_err(|e| Error::InvalidConfig(format!("Invalid bitcoin_node_rpc_url: {}", e)))?;
+
+        let local_stacks_node = NodeClient::new(
+            stacks_node_rpc_url.clone(),
+            contract_name.clone(),
+            contract_address,
+        );
+
+        let stacks_wallet = StacksWallet::new(
+            contract_name.clone(),
+            contract_address,
+            stacks_private_key,
+            stacks_address,
+            stacks_version,
+            config.transaction_fee.clone(),
+        );
+
+        let bitcoin_wallet = BitcoinWallet::new(bitcoin_address, bitcoin_network);
+
+        let local_bitcoin_node = LocalhostBitcoinNode::new(bitcoin_node_rpc_url.clone());
+        local_bitcoin_node.load_wallet(bitcoin_wallet.address()).unwrap();
+
         Ok(Self {
             contract_name,
             contract_address,
             stacks_private_key,
             stacks_address,
-            stacks_node_rpc_url: Url::parse(&config.stacks_node_rpc_url)
-                .map_err(|e| Error::InvalidConfig(format!("Invalid stacks_node_rpc_url: {}", e)))?,
-            bitcoin_node_rpc_url: Url::parse(&config.bitcoin_node_rpc_url).map_err(|e| {
-                Error::InvalidConfig(format!("Invalid bitcoin_node_rpc_url: {}", e))
-            })?,
+            stacks_node_rpc_url,
+            bitcoin_node_rpc_url,
+            local_stacks_node,
+            stacks_wallet,
+            local_bitcoin_node,
+            bitcoin_wallet,
             bitcoin_private_key,
             bitcoin_xpub: bitcoin_address,
             frost_dkg_round_id: config.frost_dkg_round_id,
