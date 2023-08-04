@@ -11,10 +11,17 @@ use bincode::config;
 use bitcoin::{KeyPair, XOnlyPublicKey};
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use blockstack_lib::address::AddressHashMode;
+use blockstack_lib::burnchains::Address;
 use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
 use blockstack_lib::types::chainstate::{StacksAddress, StacksPublicKey};
+use blockstack_lib::vm::ContractName;
 use toml;
 use url::Url;
+use crate::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode};
+use crate::bitcoin_wallet::BitcoinWallet;
+use crate::peg_wallet::BitcoinWallet as BitcoinWalletTrait;
+use crate::stacks_node::client::NodeClient;
+use crate::stacks_wallet::StacksWallet;
 
 // import type Bitcoin PrivateKey
 // import type Bitcoin xOnlyPubKey and address
@@ -79,6 +86,7 @@ pub enum Network {
 
 #[derive(Clone, Deserialize, Default, Debug)]
 struct RawConfig {
+    pub sbtc_contract: String,
     pub stacks_private_key: String,
     pub stacks_node_rpc_url: String,
     pub bitcoin_private_key: String,
@@ -174,6 +182,23 @@ impl RawConfig {
             Network::Regtest => (TransactionVersion::Testnet, bitcoin::Network::Regtest),
         }
     }
+
+    pub fn parse_contract(&self) -> Result<(ContractName, StacksAddress), Error> {
+        let mut split = self.sbtc_contract.split('.');
+        let contract_address = split
+            .next()
+            .ok_or(Error::InvalidContract("Missing address".to_string()))?;
+        let contract_name = split
+            .next()
+            .ok_or(Error::InvalidContract("Missing name.".to_string()))?
+            .to_owned();
+
+        let contract_address = StacksAddress::from_string(contract_address)
+            .ok_or(Error::InvalidContract("Bad contract address.".to_string()))?;
+        let contract_name = ContractName::try_from(contract_name)
+            .map_err(|e| Error::InvalidContract(format!("Bad contract name: {}.", e)))?;
+        Ok((contract_name, contract_address))
+    }
 }
 
 #[derive(Default, Clone, Debug)]
@@ -254,21 +279,46 @@ impl TryFrom<&RawConfig> for Config {
         let (stacks_private_key, stacks_address) = raw_config.parse_stacks_private_key()?;
         let (bitcoin_private_key, bitcoin_xonly_public_key) = raw_config.parse_bitcoin_private_key()?;
         let (stacks_version, bitcoin_network) = raw_config.parse_version();
+        let (contract_name, contract_address) = raw_config.parse_contract();
+
+        let stacks_node_rpc_url = Url::parse(raw_config.stacks_node_rpc_url.as_str())
+            .map_err(|e|
+                Error::InvalidConfigUrl(format!("Invalid stacks_node_rpc_url: {}", e))
+            )?;
+
+        let bitcoin_node_rpc_url = Url::parse(raw_config.bitcoin_node_rpc_url.as_str())
+            .map_err(|e|
+                Error::InvalidConfigUrl(format!("Invalid bitcoin_node_rpc_url: {}", e))
+            )?;
+
+        let mut local_stacks_node = NodeClient::new(
+            stacks_node_rpc_url.clone(),
+            contract_name.clone(),
+            config.contract_address,
+        );
+
+        let stacks_wallet = StacksWallet::new(
+            config.contract_name.clone(),
+            config.contract_address,
+            config.stacks_private_key,
+            config.stacks_address,
+            config.stacks_version,
+            config.transaction_fee,
+        );
+
+        let bitcoin_wallet = BitcoinWallet::new(xonly_pubkey, config.bitcoin_network);
+
+        let local_bitcoin_node = LocalhostBitcoinNode::new(config.bitcoin_node_rpc_url.clone());
+        local_bitcoin_node.load_wallet(bitcoin_wallet.address())?;
 
         Ok(Config::new(
             stacks_private_key,
             stacks_address,
-            Url::parse(raw_config.stacks_node_rpc_url.as_str())
-                .map_err(|e|
-                    Error::InvalidConfigUrl(format!("Invalid stacks_node_rpc_url: {}", e))
-                )?,
+            stacks_node_rpc_url,
             stacks_version,
             bitcoin_private_key,
             bitcoin_xonly_public_key,
-            Url::parse(raw_config.bitcoin_node_rpc_url.as_str())
-                .map_err(|e|
-                    Error::InvalidConfigUrl(format!("Invalid bitcoin_node_rpc_url: {}", e))
-                )?,
+            bitcoin_node_rpc_url
             raw_config.transaction_fee,
             bitcoin_network,
             raw_config.keys_threshold,

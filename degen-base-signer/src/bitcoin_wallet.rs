@@ -148,7 +148,7 @@ fn withdrawal_data_output() -> TxOut {
         .push_slice(&data)
         .into_script();
 
-    bitcoin::TxOut {
+    TxOut {
         value: 0,
         script_pubkey,
     }
