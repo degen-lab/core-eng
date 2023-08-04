@@ -61,6 +61,7 @@ struct Wallet {
     warning: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct LocalhostBitcoinNode {
     bitcoind_api: Url,
     wallet_name: String,

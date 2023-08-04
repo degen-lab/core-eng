@@ -59,6 +59,7 @@ impl From<&serde_json::Value> for BroadcastError {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct NodeClient {
     node_url: Url,
     client: Client,

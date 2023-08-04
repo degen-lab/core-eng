@@ -38,6 +38,7 @@ pub enum Error {
     BlockstackError(#[from] blockstack_lib::vm::errors::Error),
 }
 
+#[derive(Debug, Clone)]
 pub struct StacksWallet {
     contract_address: StacksAddress,
     contract_name: ContractName,

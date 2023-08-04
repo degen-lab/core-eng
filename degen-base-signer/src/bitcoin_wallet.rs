@@ -25,6 +25,7 @@ pub enum Error {
     MismatchedFulfillmentFee,
 }
 
+#[derive(Debug, Clone)]
 pub struct BitcoinWallet {
     address: Address,
     public_key: XOnlyPublicKey,

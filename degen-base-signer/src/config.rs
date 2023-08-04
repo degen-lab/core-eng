@@ -47,6 +47,8 @@ pub enum Error {
     InvalidBitcoinPrivateKey(String),
     #[error("Invalid config url. {0}")]
     InvalidConfigUrl(String),
+    #[error("Invalid contract. {0}")]
+    InvalidContract(String),
 }
 
 #[derive(Parser)]
@@ -209,13 +211,19 @@ pub struct PublicKeys {
 
 #[derive(Clone, Debug)]
 pub struct Config {
+    pub contract_name: ContractName,
+    pub contract_address: StacksAddress,
     pub stacks_private_key: StacksPrivateKey,
     pub stacks_address: StacksAddress,
     pub stacks_node_rpc_url: Url,
+    pub local_stacks_node: NodeClient,
+    pub stacks_wallet: StacksWallet,
     pub stacks_version: TransactionVersion,
     pub bitcoin_private_key: SecretKey,
     pub bitcoin_xonly_public_key: XOnlyPublicKey,
     pub bitcoin_node_rpc_url: Url,
+    pub local_bitcoin_node: LocalhostBitcoinNode,
+    pub bitcoin_wallet: BitcoinWallet,
     pub transaction_fee: u64,
     pub bitcoin_network: bitcoin::Network,
     pub http_relay_url: String,
@@ -230,13 +238,19 @@ pub struct Config {
 
 impl Config {
     pub fn new(
+        contract_name: ContractName,
+        contract_address: StacksAddress,
         stacks_private_key: StacksPrivateKey,
         stacks_address: StacksAddress,
         stacks_node_rpc_url: Url,
+        local_stacks_node: NodeClient,
+        stacks_wallet: StacksWallet,
         stacks_version: TransactionVersion,
         bitcoin_private_key: SecretKey,
         bitcoin_xonly_public_key: XOnlyPublicKey,
         bitcoin_node_rpc_url: Url,
+        local_bitcoin_node: LocalhostBitcoinNode,
+        bitcoin_wallet: BitcoinWallet,
         transaction_fee: u64,
         bitcoin_network: bitcoin::Network,
         keys_threshold: u32,
@@ -247,13 +261,19 @@ impl Config {
         http_relay_url: String,
     ) -> Config {
         Self {
+            contract_name,
+            contract_address,
             stacks_private_key,
             stacks_address,
             stacks_node_rpc_url,
+            local_stacks_node,
+            stacks_wallet,
             stacks_version,
             bitcoin_private_key,
             bitcoin_xonly_public_key,
             bitcoin_node_rpc_url,
+            local_bitcoin_node,
+            bitcoin_wallet,
             transaction_fee,
             bitcoin_network,
             keys_threshold,
@@ -279,7 +299,7 @@ impl TryFrom<&RawConfig> for Config {
         let (stacks_private_key, stacks_address) = raw_config.parse_stacks_private_key()?;
         let (bitcoin_private_key, bitcoin_xonly_public_key) = raw_config.parse_bitcoin_private_key()?;
         let (stacks_version, bitcoin_network) = raw_config.parse_version();
-        let (contract_name, contract_address) = raw_config.parse_contract();
+        let (contract_name, contract_address) = raw_config.parse_contract().unwrap();
 
         let stacks_node_rpc_url = Url::parse(raw_config.stacks_node_rpc_url.as_str())
             .map_err(|e|
@@ -291,34 +311,40 @@ impl TryFrom<&RawConfig> for Config {
                 Error::InvalidConfigUrl(format!("Invalid bitcoin_node_rpc_url: {}", e))
             )?;
 
-        let mut local_stacks_node = NodeClient::new(
+        let local_stacks_node = NodeClient::new(
             stacks_node_rpc_url.clone(),
             contract_name.clone(),
-            config.contract_address,
+            contract_address,
         );
 
         let stacks_wallet = StacksWallet::new(
-            config.contract_name.clone(),
-            config.contract_address,
-            config.stacks_private_key,
-            config.stacks_address,
-            config.stacks_version,
-            config.transaction_fee,
+            contract_name.clone(),
+            contract_address,
+            stacks_private_key,
+            stacks_address,
+            stacks_version,
+            raw_config.transaction_fee.clone(),
         );
 
-        let bitcoin_wallet = BitcoinWallet::new(xonly_pubkey, config.bitcoin_network);
+        let bitcoin_wallet = BitcoinWallet::new(bitcoin_xonly_public_key, bitcoin_network);
 
-        let local_bitcoin_node = LocalhostBitcoinNode::new(config.bitcoin_node_rpc_url.clone());
-        local_bitcoin_node.load_wallet(bitcoin_wallet.address())?;
+        let local_bitcoin_node = LocalhostBitcoinNode::new(bitcoin_node_rpc_url.clone());
+        local_bitcoin_node.load_wallet(bitcoin_wallet.address()).unwrap();
 
         Ok(Config::new(
+            contract_name,
+            contract_address,
             stacks_private_key,
             stacks_address,
             stacks_node_rpc_url,
+            local_stacks_node,
+            stacks_wallet,
             stacks_version,
             bitcoin_private_key,
             bitcoin_xonly_public_key,
-            bitcoin_node_rpc_url
+            bitcoin_node_rpc_url,
+            local_bitcoin_node,
+            bitcoin_wallet,
             raw_config.transaction_fee,
             bitcoin_network,
             raw_config.keys_threshold,

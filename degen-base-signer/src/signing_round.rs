@@ -14,10 +14,12 @@ use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::Builder;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::util::taproot;
+use blockstack_lib::burnchains::Address;
 use blockstack_lib::burnchains::bitcoin::address::BitcoinAddress;
 use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
 use blockstack_lib::types::chainstate::StacksAddress;
 use blockstack_lib::util::hash::Hash160;
+use blockstack_lib::vm::ContractName;
 use tracing::{debug, info, warn};
 use url::Url;
 pub use wsts;
@@ -34,7 +36,11 @@ use crate::{
     state_machine::{Error as StateMachineError, StateMachine, States},
     util::{decrypt, encrypt, make_shared_secret},
 };
+use crate::bitcoin_node::LocalhostBitcoinNode;
 use crate::bitcoin_scripting::{create_script_refund, create_script_unspendable, create_tree};
+use crate::bitcoin_wallet::BitcoinWallet;
+use crate::stacks_node::client::NodeClient;
+use crate::stacks_wallet::StacksWallet;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -98,22 +104,28 @@ pub struct SigningRound {
     pub network_private_key: Scalar,
     pub public_keys: PublicKeys,
     // TODO: should be encrypted, i guess?
+    pub contract_name: ContractName,
+    pub contract_address: StacksAddress,
     pub stacks_private_key: StacksPrivateKey,
     pub stacks_address: StacksAddress,
     pub stacks_node_rpc_url: Url,
+    pub local_stacks_node: NodeClient,
+    pub stacks_wallet: StacksWallet,
     pub stacks_version: TransactionVersion,
     pub bitcoin_private_key: SecretKey,
     pub bitcoin_xonly_public_key: XOnlyPublicKey,
     pub bitcoin_node_rpc_url: Url,
+    pub local_bitcoin_node: LocalhostBitcoinNode,
+    pub bitcoin_wallet: BitcoinWallet,
     pub transaction_fee: u64,
-    pub bitcoin_network: bitcoin::Network,
+    pub bitcoin_network: Network,
 
     pub script_addresses: BTreeMap<PublicKey, BitcoinAddress>,
 
 }
 
 pub struct Signer {
-    pub frost_signer: wsts::v1::Signer,
+    pub frost_signer: v1::Signer,
     pub signer_id: u32,
 }
 
@@ -418,13 +430,33 @@ impl SigningRound {
             public_nonces: vec![],
             network_private_key,
             public_keys,
+            contract_name: ContractName::from(""),
+            contract_address: StacksAddress::new(26, Hash160([0; 20])),
             stacks_private_key: StacksPrivateKey::new(),
-            stacks_address: StacksAddress::new(26, Hash160([0; 20]))  ,
+            stacks_address: StacksAddress::new(26, Hash160([0; 20])),
             stacks_node_rpc_url: Url::from_str("").unwrap(),
+            local_stacks_node: NodeClient::new(
+                Url::from_str("").unwrap(),
+                ContractName::from(""),
+                StacksAddress::new(26, Hash160([0; 20]))
+            ),
+            stacks_wallet: StacksWallet::new(
+                ContractName::from(""),
+                StacksAddress::from_string("").unwrap(),
+                StacksPrivateKey::new(),
+                StacksAddress::new(26, Hash160([0; 20])),
+                TransactionVersion::Testnet,
+                0,
+            ),
             stacks_version: TransactionVersion::Testnet,
             bitcoin_private_key: SecretKey::new(&mut rng),
             bitcoin_xonly_public_key: SecretKey::new(&mut rng).x_only_public_key(&Secp256k1::new()).0,
             bitcoin_node_rpc_url: Url::from_str("").unwrap(),
+            local_bitcoin_node: LocalhostBitcoinNode::new(Url::from_str("").unwrap()),
+            bitcoin_wallet: BitcoinWallet::new(
+                XOnlyPublicKey::from_str("cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115").unwrap(),
+                Network::Regtest,
+            ),
             transaction_fee: 0,
             bitcoin_network: Network::Regtest,
             script_addresses: BTreeMap::new(),
@@ -814,7 +846,8 @@ impl SigningRound {
         );
 
         info!("tap info: {:#?}\naddress: {:#?}", tap_info, address);
-
+        info!("");
+        info!("bitcoin wallet: {:#?}", self.bitcoin_wallet);
         // send funds to script
         // my private key to spend through it
         // my address
@@ -871,13 +904,19 @@ impl From<&FrostSigner> for SigningRound {
             public_nonces: vec![],
             network_private_key,
             public_keys,
+            contract_name: signer.config.contract_name.clone(),
+            contract_address: signer.config.contract_address,
             stacks_private_key: signer.config.stacks_private_key,
             stacks_address: signer.config.stacks_address,
             stacks_node_rpc_url: signer.config.stacks_node_rpc_url.clone(),
+            local_stacks_node: signer.config.local_stacks_node.clone(),
+            stacks_wallet: signer.config.stacks_wallet.clone(),
             stacks_version: signer.config.stacks_version,
             bitcoin_private_key: signer.config.bitcoin_private_key,
             bitcoin_xonly_public_key: signer.config.bitcoin_xonly_public_key,
             bitcoin_node_rpc_url: signer.config.bitcoin_node_rpc_url.clone(),
+            local_bitcoin_node: signer.config.local_bitcoin_node.clone(),
+            bitcoin_wallet: signer.config.bitcoin_wallet.clone(),
             transaction_fee: signer.config.transaction_fee,
             bitcoin_network: signer.config.bitcoin_network,
             script_addresses: BTreeMap::new(),
