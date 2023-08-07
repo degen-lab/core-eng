@@ -1,4 +1,4 @@
 # fund.sh
-bitcoin-cli -regtest -rpcpassword=devnet -rpcuser=devnet generatetoaddress 1 <btc-addr-1>
-bitcoin-cli -regtest -rpcpassword=devnet -rpcuser=devnet generatetoaddress 1 <btc-addr-2>
-bitcoin-cli -regtest -rpcpassword=devnet -rpcuser=devnet generatetoaddress 101 <btc-addr-3>
+bitcoin-cli -regtest -rpcpassword=devnet -rpcuser=devnet generatetoaddress 1 BCRT1P8M4KHK8A06CUCAWGPPQ3GDKEXTH7MZF6DGW54KZ67TKFQ3RCUU5QNKHUDG
+bitcoin-cli -regtest -rpcpassword=devnet -rpcuser=devnet generatetoaddress 1 BCRT1P6HNYZU0USW758H2F04GMWDGYWXAK9PAMA9S7AQ7NZEMXVGG0JTHSN9DNZN
+bitcoin-cli -regtest -rpcpassword=devnet -rpcuser=devnet generatetoaddress 101 BCRT1P6DDX97EN6YMWLHCF4RA7WK3KEXD0U5DPCEV2YTXLRXFZMVZ67GUQDLARFQ

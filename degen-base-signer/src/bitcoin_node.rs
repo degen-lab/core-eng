@@ -3,7 +3,7 @@ use std::{borrow::Cow, str::FromStr};
 use bdk::descriptor::calc_checksum;
 use bitcoin::{consensus::Encodable, hashes::sha256d::Hash, util::amount::Amount, Txid};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Number, Value};
 use tracing::{debug, info, warn};
 use url::Url;
 
@@ -213,6 +213,14 @@ impl LocalhostBitcoinNode {
             );
         }
         Ok(())
+    }
+
+    pub fn get_block_count(&self) -> Result<u64, Error> {
+        debug!("Getting block count...");
+        let block_count = serde_json::from_value::<Number>(self.call("getblockcount", ())?)
+            .map_err(|e| Error::InvalidResponseJSON(e.to_string()))?
+            .as_u64().expect("block count not a number");
+        Ok(block_count)
     }
 
     fn import_address(&self, address: &bitcoin::Address) -> Result<(), Error> {

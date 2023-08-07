@@ -9,17 +9,26 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use bitcoin::{Network, PrivateKey, PublicKey, XOnlyPublicKey};
+use bdk::miniscript::psbt::SighashError;
+use bitcoin::{EcdsaSighashType, KeyPair, Network, PrivateKey, PublicKey, SchnorrSighashType, TxOut, XOnlyPublicKey};
 use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::Builder;
+use bitcoin::consensus::serialize;
+use bitcoin::hashes::Hash;
+use bitcoin::psbt::Prevouts;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
-use bitcoin::util::taproot;
-use blockstack_lib::burnchains::Address;
-use blockstack_lib::burnchains::bitcoin::address::BitcoinAddress;
+use bitcoin::util::sighash::SighashCache;
+use bitcoin::util::{base58, taproot};
+use blockstack_lib::burnchains::{Address, BurnchainBlockHeader, BurnchainTransaction, PrivateKey as PrivateKeyTrait, Txid};
+use blockstack_lib::burnchains::bitcoin::{BitcoinNetworkType, BitcoinTransaction, BitcoinTxOutput};
+use blockstack_lib::burnchains::bitcoin::address::{BitcoinAddress, SegwitBitcoinAddress};
+use blockstack_lib::chainstate::burn::Opcodes;
+use blockstack_lib::chainstate::burn::operations::PegOutRequestOp;
 use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
 use blockstack_lib::types::chainstate::StacksAddress;
-use blockstack_lib::util::hash::Hash160;
+use blockstack_lib::util::hash::{Hash160, Sha256Sum};
 use blockstack_lib::vm::ContractName;
+use rand::Rng;
 use tracing::{debug, info, warn};
 use url::Url;
 pub use wsts;
@@ -36,9 +45,10 @@ use crate::{
     state_machine::{Error as StateMachineError, StateMachine, States},
     util::{decrypt, encrypt, make_shared_secret},
 };
-use crate::bitcoin_node::LocalhostBitcoinNode;
-use crate::bitcoin_scripting::{create_script_refund, create_script_unspendable, create_tree};
+use crate::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode};
+use crate::bitcoin_scripting::{create_script_refund, create_script_unspendable, create_tree, get_current_block_height, sign_tx};
 use crate::bitcoin_wallet::BitcoinWallet;
+use crate::peg_wallet::BitcoinWallet as BitcoinWalletTrait;
 use crate::stacks_node::client::NodeClient;
 use crate::stacks_wallet::StacksWallet;
 
@@ -56,6 +66,8 @@ pub enum Error {
     InvalidSignatureShare,
     #[error("State Machine Error: {0}")]
     StateMachineError(#[from] StateMachineError),
+    #[error("Error occured during signing: {0}")]
+    SigningError(#[from] SighashError),
 }
 
 pub trait Signable {
@@ -832,22 +844,111 @@ impl SigningRound {
     }
 
     fn degen_create_script(&mut self, degens_create_script: DegensScriptRequest) -> Result<Vec<MessageTypes>, Error> {
-        // TODO: call bitcoin_wallet to get block height
+        let current_block_height = get_current_block_height(&self.local_bitcoin_node);
+        let secp = Secp256k1::new();
+        let keypair = KeyPair::from_secret_key(&secp, &self.bitcoin_private_key);
         // create script
         // here should be the creation of bitcoin script
-        let script_1 = create_script_refund(&self.bitcoin_xonly_public_key, 0);
+        let script_1 = create_script_refund(
+            &self.bitcoin_xonly_public_key,
+            current_block_height as usize,
+        );
         let script_2 = create_script_unspendable();
 
-        let (tap_info, address) = create_tree(
+        let (tap_info, script_address) = create_tree(
             &Secp256k1::new(),
-            self.bitcoin_xonly_public_key,
+            &keypair,
             &script_1,
             &script_2,
         );
 
-        info!("tap info: {:#?}\naddress: {:#?}", tap_info, address);
-        info!("");
-        info!("bitcoin wallet: {:#?}", self.bitcoin_wallet);
+        let unspent_list = self.local_bitcoin_node.list_unspent(self.bitcoin_wallet.address()).unwrap();
+
+        // create new op using from_tx()
+        // create tx with recipient script address and block header
+        // TODO: degens change amount to readonly sc call
+        let amount: u64 = 1000;
+
+        let script_address_pubkey = &script_address.script_pubkey();
+        let script_address_bytes = script_address_pubkey.as_bytes();
+
+        let mut script_pubkey = vec![81, 32]; // OP_1 OP_PUSHBYTES_32
+        script_pubkey.extend_from_slice(&script_address_bytes);
+
+        let mut msg = amount.to_be_bytes().to_vec();
+        msg.extend_from_slice(&script_pubkey);
+
+        let signature = self.stacks_private_key
+            .sign(Sha256Sum::from_data(&msg).as_bytes())
+            .expect("Failed to sign amount and recipient fields.");
+
+        let mut data = vec![];
+        data.extend_from_slice(&amount.to_be_bytes());
+        data.extend_from_slice(signature.as_bytes());
+
+        let output_script_address = BitcoinAddress::from_scriptpubkey(
+            BitcoinNetworkType::Regtest,
+            script_address_bytes
+        ).unwrap();
+
+        let output = BitcoinTxOutput {
+            address: output_script_address,
+            units: amount,
+        };
+
+        let mut rng = rand::thread_rng();
+
+        let peg_wallet_address = rng.gen::<[u8; 32]>();
+        let output2 = BitcoinTxOutput {
+            units: amount,
+            address: BitcoinAddress::Segwit(SegwitBitcoinAddress::P2TR(true, peg_wallet_address)),
+        };
+
+        let header = BurnchainBlockHeader {
+            block_height: 0,
+            block_hash: [0; 32].into(),
+            parent_block_hash: [0; 32].into(),
+            num_txs: 0,
+            timestamp: 0,
+        };
+
+        let burnchain_tx: BurnchainTransaction = BurnchainTransaction::Bitcoin(BitcoinTransaction {
+            txid: Txid([0; 32]),
+            vtxindex: 0,
+            opcode: Opcodes::PegOutRequest as u8,
+            data,
+            data_amt: 0,
+            inputs: vec![],
+            outputs: vec![output, output2],
+        });
+
+        let op = PegOutRequestOp::from_tx(&header, &burnchain_tx).expect("Failed to construct peg-out request op");
+        let (mut tx, prevouts_vec) = self.bitcoin_wallet.script_peg_out(&op, unspent_list).expect("Failed to construct transaction");
+
+        // TODO: is the tx signed? how to sign it if not?
+        info!("unsigned_tx: {:#?}", tx);
+
+        for index in 0..tx.input.len() {
+            let prevout = Prevouts::One(
+                0,
+                prevouts_vec[index].clone(),
+            );
+            let sig = sign_tx(&secp, &tx, &prevout, &keypair, &tap_info);
+            tx.input[index].witness.push(sig);
+        }
+
+        info!("signed_tx: {:#?}", tx);
+
+        // TODO: broadcast transaction (see how the tx was signed, if the current one isn't)
+
+        let script_txid = self.local_bitcoin_node.broadcast_transaction(&tx);
+        info!("broadcast_txid: {:#?}", script_txid);
+
+        // TODO: create another pegout with input the script address and output 2 user addresses in bitcoin_wallet
+
+        // TODO: send the message that the script was created and money sent to it
+        // TODO: the message contains signer's stacks address and script address (to keep track of the people who sent money), make a list for coordinator
+
         // send funds to script
         // my private key to spend through it
         // my address
@@ -859,7 +960,6 @@ impl SigningRound {
         // how do we want to return the addresses? change type? all functions have this return type
         Ok(vec![])
     }
-
 
 }
 

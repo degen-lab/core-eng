@@ -58,6 +58,14 @@ pub trait BitcoinWallet {
         txouts: Vec<UTXO>,
     ) -> Result<(bitcoin_node::BitcoinTransaction, Vec<TxOut>), Error>;
 
+    // Builds an unsigned transaction using the provided utxos to cover the spend amount for the script
+    fn script_peg_out(
+        &self,
+        op: &PegOutRequestOp,
+        txouts: Vec<UTXO>,
+    ) -> Result<(bitcoin_node::BitcoinTransaction, Vec<TxOut>), Error>;
+
+
     /// Returns the BTC address for the wallet
     fn address(&self) -> &BitcoinAddress;
 

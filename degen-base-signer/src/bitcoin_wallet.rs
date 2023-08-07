@@ -128,6 +128,78 @@ impl BitcoinWalletTrait for BitcoinWallet {
         Ok((tx, prevouts))
     }
 
+    fn script_peg_out(
+        &self,
+        op: &PegOutRequestOp,
+        available_utxos: Vec<UTXO>,
+    ) -> Result<(Transaction, Vec<TxOut>), PegWalletError> {
+        // Create an empty transaction
+        let mut tx = Transaction {
+            version: 2,
+            lock_time: bitcoin::PackedLockTime(0),
+            input: vec![],
+            output: vec![],
+        };
+        // Consume UTXOs until we have enough to cover the total spend (fulfillment fee and peg out amount)
+        let mut total_consumed = 0;
+        let mut prevouts = vec![];
+        for utxo in available_utxos.into_iter() {
+            if total_consumed < op.amount {
+                total_consumed += utxo.amount;
+                tx.input.push(utxo_to_input(&utxo)?);
+                prevouts.push(utxo_to_output(&utxo)?);
+            } else {
+                // We have consumed enough to cover the total spend
+                // i.e. have covered the peg out amount
+                break;
+            }
+        }
+        // Sanity check all the things!
+        // Check that we have sufficient funds and didn't just run out of available utxos.
+        if total_consumed < op.amount {
+            warn!(
+                "Consumed total {} is less than intended spend: {}",
+                total_consumed, op.amount
+            );
+            return Err(PegWalletError::from(Error::InsufficientFunds));
+        }
+
+        // Get the transaction change amount
+        let change_amount = total_consumed - op.amount;
+        debug!(
+            "change_amount: {:?}, total_consumed: {:?}, op.amount: {:?}",
+            change_amount, total_consumed, op.amount
+        );
+        // Do not want to use Script::new_v1_p2tr because it will tweak our key when we don't want it to
+        // TODO: update this
+        let public_key_tweaked = TweakedPublicKey::dangerous_assume_tweaked(self.public_key);
+        let script_pubkey = Script::new_v1_p2tr_tweaked(public_key_tweaked);
+        let fee = 300;
+        tx.output.push(withdrawal_data_output());
+
+        let withdrawal_output = bitcoin::TxOut {
+            value: op.amount,
+            script_pubkey: script_pubkey.clone(),
+        };
+        tx.output.push(withdrawal_output);
+
+        if change_amount >= script_pubkey.dust_value().to_sat() {
+            let change_output = bitcoin::TxOut {
+                value: change_amount - fee,
+                script_pubkey,
+            };
+            tx.output.push(change_output);
+        } else {
+            // Instead of leaving that change to the BTC miner, we could / should bump the sortition fee
+            debug!("Not enough change to clear dust limit. Not adding change address.");
+        }
+
+        Ok((tx, prevouts))
+    }
+
+
+
+
     fn address(&self) -> &Address {
         &self.address
     }
