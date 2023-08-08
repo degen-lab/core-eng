@@ -25,7 +25,8 @@ use blockstack_lib::burnchains::bitcoin::address::{BitcoinAddress, SegwitBitcoin
 use blockstack_lib::chainstate::burn::Opcodes;
 use blockstack_lib::chainstate::burn::operations::PegOutRequestOp;
 use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
-use blockstack_lib::types::chainstate::StacksAddress;
+use blockstack_lib::chainstate::stacks::address::PoxAddress;
+use blockstack_lib::types::chainstate::{BurnchainHeaderHash, StacksAddress};
 use blockstack_lib::util::hash::{Hash160, Sha256Sum};
 use blockstack_lib::vm::ContractName;
 use rand::Rng;
@@ -45,8 +46,8 @@ use crate::{
     state_machine::{Error as StateMachineError, StateMachine, States},
     util::{decrypt, encrypt, make_shared_secret},
 };
-use crate::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode};
-use crate::bitcoin_scripting::{create_script_refund, create_script_unspendable, create_tree, get_current_block_height, sign_tx};
+use crate::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode, UTXO};
+use crate::bitcoin_scripting::{create_script_refund, create_script_unspendable, create_tree, create_tx_from_user_to_script, get_current_block_height, sign_key_tx, sign_user_to_script_tx};
 use crate::bitcoin_wallet::BitcoinWallet;
 use crate::peg_wallet::BitcoinWallet as BitcoinWalletTrait;
 use crate::stacks_node::client::NodeClient;
@@ -844,105 +845,161 @@ impl SigningRound {
     }
 
     fn degen_create_script(&mut self, degens_create_script: DegensScriptRequest) -> Result<Vec<MessageTypes>, Error> {
-        let current_block_height = get_current_block_height(&self.local_bitcoin_node);
+        // let current_block_height = get_current_block_height(&self.local_bitcoin_node);
         let secp = Secp256k1::new();
         let keypair = KeyPair::from_secret_key(&secp, &self.bitcoin_private_key);
         // create script
         // here should be the creation of bitcoin script
         let script_1 = create_script_refund(
             &self.bitcoin_xonly_public_key,
-            current_block_height as usize,
+            0,
         );
         let script_2 = create_script_unspendable();
 
         let (tap_info, script_address) = create_tree(
-            &Secp256k1::new(),
+            &secp,
             &keypair,
             &script_1,
             &script_2,
         );
 
-        let unspent_list = self.local_bitcoin_node.list_unspent(self.bitcoin_wallet.address()).unwrap();
+        // TODO: send amount from user to script
 
-        // create new op using from_tx()
-        // create tx with recipient script address and block header
-        // TODO: degens change amount to readonly sc call
-        let amount: u64 = 1000;
+        let unspent_list_signer = self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()).expect("Failed to get unspent list for signer.");
 
-        let script_address_pubkey = &script_address.script_pubkey();
-        let script_address_bytes = script_address_pubkey.as_bytes();
+        let amount_to_script: u64 = 1000;
+        let fee: u64 = 300;
 
-        let mut script_pubkey = vec![81, 32]; // OP_1 OP_PUSHBYTES_32
-        script_pubkey.extend_from_slice(&script_address_bytes);
+        let user_to_script_unsigned = create_tx_from_user_to_script(
+            &unspent_list_signer,
+            &self.bitcoin_wallet.address(),
+            &script_address,
+            amount_to_script,
+            fee,
+            0);
 
-        let mut msg = amount.to_be_bytes().to_vec();
-        msg.extend_from_slice(&script_pubkey);
+        let user_to_script_signed = sign_user_to_script_tx(
+            &secp,
+            &user_to_script_unsigned,
+            amount_to_script,
+            fee,
+            0,
+            self.bitcoin_private_key,
+        );
 
-        let signature = self.stacks_private_key
-            .sign(Sha256Sum::from_data(&msg).as_bytes())
-            .expect("Failed to sign amount and recipient fields.");
+        let user_to_script_txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed).unwrap();
 
-        let mut data = vec![];
-        data.extend_from_slice(&amount.to_be_bytes());
-        data.extend_from_slice(signature.as_bytes());
+        info!("user to script signed: {user_to_script_signed:#?}");
+        info!("txid: {user_to_script_txid}");
 
-        let output_script_address = BitcoinAddress::from_scriptpubkey(
-            BitcoinNetworkType::Regtest,
-            script_address_bytes
-        ).unwrap();
+        // let unspent_list = self.local_bitcoin_node.list_unspent(&script_address).unwrap();
+        // info!("script_address: {script_address:#?}");
+        // info!("unspent list: {unspent_list:#?}");
+        //
+        // let amount = 1000;
+        //
+        // let pox_addr_1 = bitcoin::Address::from_str("BCRT1P8M4KHK8A06CUCAWGPPQ3GDKEXTH7MZF6DGW54KZ67TKFQ3RCUU5QNKHUDG").unwrap();
+        // let pox_addr_2 = bitcoin::Address::from_str("BCRT1P6HNYZU0USW758H2F04GMWDGYWXAK9PAMA9S7AQ7NZEMXVGG0JTHSN9DNZN").unwrap();
+        // let addresses_list = vec![pox_addr_1, pox_addr_2, script_address];
+        //
+        // let script_unsigned_tx = create_tx_from_user_to_script(&unspent_list, &addresses_list, amount, 0);
+        //
+        // info!("{script_unsigned_tx:#?}");
 
-        let output = BitcoinTxOutput {
-            address: output_script_address,
-            units: amount,
-        };
+        // let script_txid = self.local_bitcoin_node.broadcast_transaction(&script_signed_tx);
 
-        let mut rng = rand::thread_rng();
+        // info!("{script_txid:#?}");
 
-        let peg_wallet_address = rng.gen::<[u8; 32]>();
-        let output2 = BitcoinTxOutput {
-            units: amount,
-            address: BitcoinAddress::Segwit(SegwitBitcoinAddress::P2TR(true, peg_wallet_address)),
-        };
+        // // create new op using from_tx()
+        // // create tx with recipient script address and block header
+        // // TODO: degens change amount to readonly sc call
+        // let amount: u64 = 1000;
 
-        let header = BurnchainBlockHeader {
-            block_height: 0,
-            block_hash: [0; 32].into(),
-            parent_block_hash: [0; 32].into(),
-            num_txs: 0,
-            timestamp: 0,
-        };
+        // let script_address_pubkey = &script_address.script_pubkey();
+        // let script_address_bytes = script_address_pubkey.as_bytes();
+        //
+        // let mut script_pubkey = vec![81, 32]; // OP_1 OP_PUSHBYTES_32
+        // script_pubkey.extend_from_slice(&script_address_bytes);
+        //
+        // let mut msg = amount.to_be_bytes().to_vec();
+        // msg.extend_from_slice(&script_pubkey);
+        //
+        // let signature = self.stacks_private_key
+        //     .sign(Sha256Sum::from_data(&msg).as_bytes())
+        //     .expect("Failed to sign amount and recipient fields.");
+        //
+        // let mut data = vec![];
+        // data.extend_from_slice(&amount.to_be_bytes());
+        // data.extend_from_slice(signature.as_bytes());
+        //
+        // let output_script_address = BitcoinAddress::from_scriptpubkey(
+        //     BitcoinNetworkType::Regtest,
+        //     script_address_bytes
+        // ).unwrap();
+        //
+        // let output = BitcoinTxOutput {
+        //     address: output_script_address,
+        //     units: amount,
+        // };
+        //
+        // let mut rng = rand::thread_rng();
+        //
+        // let peg_wallet_address = rng.gen::<[u8; 32]>();
+        // let output2 = BitcoinTxOutput {
+        //     units: amount,
+        //     address: BitcoinAddress::Segwit(SegwitBitcoinAddress::P2TR(true, peg_wallet_address)),
+        // };
+        //
+        // let header = BurnchainBlockHeader {
+        //     block_height: 0,
+        //     block_hash: [0; 32].into(),
+        //     parent_block_hash: [0; 32].into(),
+        //     num_txs: 0,
+        //     timestamp: 0,
+        // };
+        //
+        // let burnchain_tx: BurnchainTransaction = BurnchainTransaction::Bitcoin(BitcoinTransaction {
+        //     txid: Txid([0; 32]),
+        //     vtxindex: 0,
+        //     opcode: Opcodes::PegOutRequest as u8,
+        //     data,
+        //     data_amt: 0,
+        //     inputs: vec![],
+        //     outputs: vec![output, output2],
+        // });
+        //
+        // let op = PegOutRequestOp::from_tx(&header, &burnchain_tx).expect("Failed to construct peg-out request op");
 
-        let burnchain_tx: BurnchainTransaction = BurnchainTransaction::Bitcoin(BitcoinTransaction {
-            txid: Txid([0; 32]),
-            vtxindex: 0,
-            opcode: Opcodes::PegOutRequest as u8,
-            data,
-            data_amt: 0,
-            inputs: vec![],
-            outputs: vec![output, output2],
-        });
-
-        let op = PegOutRequestOp::from_tx(&header, &burnchain_tx).expect("Failed to construct peg-out request op");
-        let (mut tx, prevouts_vec) = self.bitcoin_wallet.script_peg_out(&op, unspent_list).expect("Failed to construct transaction");
-
-        // TODO: is the tx signed? how to sign it if not?
-        info!("unsigned_tx: {:#?}", tx);
-
-        for index in 0..tx.input.len() {
-            let prevout = Prevouts::One(
-                0,
-                prevouts_vec[index].clone(),
-            );
-            let sig = sign_tx(&secp, &tx, &prevout, &keypair, &tap_info);
-            tx.input[index].witness.push(sig);
-        }
-
-        info!("signed_tx: {:#?}", tx);
-
-        // TODO: broadcast transaction (see how the tx was signed, if the current one isn't)
-
-        let script_txid = self.local_bitcoin_node.broadcast_transaction(&tx);
-        info!("broadcast_txid: {:#?}", script_txid);
+        // let (mut tx, prevouts_vec) = self.bitcoin_wallet.script_peg_out(&op, unspent_list).expect("Failed to construct transaction");
+        //
+        // // TODO: is the tx signed? how to sign it if not?
+        // info!("unsigned_tx: {:#?}", tx);
+        //
+        // // TODO: try here same format as on vs-code
+        //
+        // let prevout = Prevouts::One(
+        //     0,
+        //     prevouts_vec[0].clone(),
+        // );
+        // let sig = sign_key_tx(&secp, &tx, &prevout, &keypair, &tap_info);
+        // tx.input[0].witness.push(sig);
+        //
+        //
+        // // for index in 0..tx.input.len() {
+        // //     let prevout = Prevouts::One(
+        // //         0,
+        // //         prevouts_vec[index].clone(),
+        // //     );
+        // //     let sig = sign_key_tx(&secp, &tx, &prevout, &keypair, &tap_info);
+        // //     tx.input[index].witness.push(sig);
+        // // }
+        //
+        // info!("signed_tx: {:#?}", tx);
+        //
+        // // TODO: broadcast transaction (see how the tx was signed, if the current one isn't)
+        //
+        // let script_txid = self.local_bitcoin_node.broadcast_transaction(&tx);
+        // info!("broadcast_txid: {:#?}", script_txid);
 
         // TODO: create another pegout with input the script address and output 2 user addresses in bitcoin_wallet
 

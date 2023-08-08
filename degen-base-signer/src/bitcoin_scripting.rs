@@ -1,15 +1,16 @@
+use std::str::FromStr;
 use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::Builder;
-use bitcoin::secp256k1::{All, Message, Secp256k1};
-use bitcoin::{Address, KeyPair, Network, SchnorrSig, SchnorrSighashType, Script, Transaction, TxOut, XOnlyPublicKey};
-use bitcoin::psbt::Prevouts;
+use bitcoin::secp256k1::{All, Message, Secp256k1, SecretKey};
+use bitcoin::{Address, EcdsaSig, EcdsaSighashType, KeyPair, Network, OutPoint, PackedLockTime, PrivateKey, PublicKey, SchnorrSig, SchnorrSighashType, Script, Sequence, Transaction, Txid, TxIn, TxOut, Witness, XOnlyPublicKey};
+use bitcoin::psbt::{Input, Prevouts};
 use bitcoin::psbt::serialize::Serialize;
 use bitcoin::schnorr::TapTweak;
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot;
 use bitcoin::util::taproot::TaprootSpendInfo;
 use tracing::info;
-use crate::bitcoin_node::LocalhostBitcoinNode;
+use crate::bitcoin_node::{LocalhostBitcoinNode, UTXO};
 
 pub fn create_script_refund(
     user_public_key: &XOnlyPublicKey,
@@ -56,7 +57,7 @@ pub fn get_current_block_height(client: &LocalhostBitcoinNode) -> u64 {
     client.get_block_count().unwrap()
 }
 
-pub fn sign_tx(
+pub fn sign_key_tx(
     secp: &Secp256k1<All>,
     tx_ref: &Transaction,
     prevouts: &Prevouts<TxOut>,
@@ -89,61 +90,78 @@ pub fn sign_tx(
     schnorr_sig.serialize()
 }
 
-// pub fn sign_message(&mut self, msg: &[u8]) -> Result<SchnorrProof, Error> {
-//     //Continually compute a new aggregate nonce until we have a valid even R
-//     loop {
-//         let R = self.compute_aggregate_nonce(msg)?;
-//         if R.has_even_y() {
-//             break;
-//         }
-//     }
-//
-//     // Collect commitments from DKG public share polys for SignatureAggregator
-//     let polys: Vec<PolyCommitment> = self
-//         .dkg_public_shares
-//         .values()
-//         .map(|ps| ps.public_share.clone())
-//         .collect();
-//
-//     let mut aggregator = v1::SignatureAggregator::new(self.total_keys, self.threshold, polys)?;
-//
-//     let nonce_responses: Vec<NonceResponse> = self.public_nonces.values().cloned().collect();
-//
-//     // Request signature shares
-//     self.request_signature_shares(&nonce_responses, msg)?;
-//     self.collect_signature_shares()?;
-//
-//     let nonces = nonce_responses
-//         .iter()
-//         .flat_map(|nr| nr.nonces.clone())
-//         .collect::<Vec<PublicNonce>>();
-//     let shares = &self
-//         .public_nonces
-//         .iter()
-//         .flat_map(|(i, _)| self.signature_shares[i].clone())
-//         .collect::<Vec<SignatureShare>>();
-//
-//     // Sign the message using the aggregator
-//     let sig = aggregator.sign(msg, &nonces, shares)?;
-//
-//     // Generate Schnorr proof
-//     let proof = SchnorrProof::new(&sig).map_err(Error::Bip340)?;
-//
-//     // Verify the proof
-//     if !proof.verify(&self.aggregate_public_key.x(), msg) {
-//         return Err(Error::SchnorrProofFailed);
-//     }
-//
-//     Ok(proof)
-//}
+pub fn create_tx_from_user_to_script (
+    outputs_vec: &Vec<UTXO>,
+    user_address: &Address,
+    script_address: &Address,
+    amount: u64,
+    fee: u64,
+    tx_index: usize,
+) -> Transaction {
+    let prev_output_txid_string = &outputs_vec[tx_index].txid;
+    let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
+    let prev_output_vout = outputs_vec[tx_index].vout.clone();
+    let outpoint = OutPoint::new(prev_output_txid, prev_output_vout);
 
-// fn get_prev_txs(
-//     client: &LocalhostBitcoinNode,
-//     address: &Address,
-// ) -> (
-//     Vec<bitcoin::TxIn>,
-//     Vec<bitcoin::Transaction>
-// ) {
-//     let vec_tx_in: Vec<TxIn> = client.list_unspent(address)
-//         .unwrap()
-// }
+    let left_amount = &outputs_vec[tx_index].amount - amount - fee;
+
+    Transaction {
+        version: 2,
+        lock_time: PackedLockTime(0),
+        input: vec![TxIn {
+            previous_output: outpoint,
+            script_sig: Script::new(),
+            sequence: Sequence(0x8030FFFF),
+            witness: Witness::default(),
+        }],
+        output: vec![
+            TxOut {
+                value: amount,
+                script_pubkey: user_address.script_pubkey(),
+            },
+            TxOut {
+                value: left_amount,
+                script_pubkey: script_address.script_pubkey(),
+            }
+        ],
+    }
+}
+
+pub fn sign_user_to_script_tx (
+    secp: &Secp256k1<All>,
+    current_tx: &Transaction,
+    amount: u64,
+    fee: u64,
+    input_index: usize,
+    secret_key: SecretKey,
+) -> Transaction {
+    let public_key = PublicKey::from_private_key(secp, &PrivateKey::new(secret_key, Network::Regtest));
+
+    let script = Builder::new()
+        .push_opcode(all::OP_DUP)
+        .push_opcode(all::OP_HASH160)
+        .push_slice(&Script::new_v0_p2wpkh(&public_key.wpubkey_hash().unwrap())[2..])
+        .push_opcode(all::OP_EQUALVERIFY)
+        .push_opcode(all::OP_CHECKSIG)
+        .into_script();
+
+    let total_amount = amount + fee;
+
+    let sig_hash = SighashCache::new(&mut current_tx.clone())
+        .segwit_signature_hash(
+            input_index,
+            &script,
+            total_amount,
+            EcdsaSighashType::All,
+        )
+        .unwrap();
+
+    let msg = Message::from_slice(&sig_hash).unwrap();
+    let sig = EcdsaSig::sighash_all(secp.sign_ecdsa(&msg, &secret_key));
+
+    let mut tx = current_tx.clone();
+
+    tx.input[input_index].witness.push(sig.to_vec());
+
+    tx
+}
