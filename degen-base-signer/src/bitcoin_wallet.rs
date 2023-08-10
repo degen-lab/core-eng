@@ -9,6 +9,8 @@ use bitcoin::{
     blockdata::script, hashes::hex::FromHex, schnorr::TweakedPublicKey, Address, Network, OutPoint,
     Script, Transaction, TxIn, XOnlyPublicKey,
 };
+use bitcoin::schnorr::UntweakedPublicKey;
+use bitcoin::secp256k1::Secp256k1;
 use tracing::{debug, warn};
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -33,8 +35,8 @@ pub struct BitcoinWallet {
 
 impl BitcoinWallet {
     pub fn new(public_key: XOnlyPublicKey, network: Network) -> Self {
-        let tweaked_public_key = TweakedPublicKey::dangerous_assume_tweaked(public_key);
-        let address = Address::p2tr_tweaked(tweaked_public_key, network);
+        // let tweaked_public_key = TweakedPublicKey::dangerous_assume_tweaked(public_key);
+        let address = Address::p2tr(&Secp256k1::new(), public_key, None, Network::Regtest);
         Self {
             address,
             public_key,

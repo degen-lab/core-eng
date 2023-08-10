@@ -3,13 +3,14 @@ use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::Builder;
 use bitcoin::secp256k1::{All, Message, Secp256k1, SecretKey};
 use bitcoin::{Address, EcdsaSig, EcdsaSighashType, KeyPair, Network, OutPoint, PackedLockTime, PrivateKey, PublicKey, SchnorrSig, SchnorrSighashType, Script, Sequence, Transaction, Txid, TxIn, TxOut, Witness, XOnlyPublicKey};
-use bitcoin::psbt::{Input, Prevouts};
+use bitcoin::psbt::{Input, PartiallySignedTransaction, Prevouts};
 use bitcoin::psbt::serialize::Serialize;
 use bitcoin::schnorr::TapTweak;
-use bitcoin::util::sighash::SighashCache;
+use bitcoin::util::sighash::{ScriptPath, SighashCache};
 use bitcoin::util::taproot;
-use bitcoin::util::taproot::TaprootSpendInfo;
+use bitcoin::util::taproot::{ControlBlock, LeafVersion, TaprootSpendInfo};
 use tracing::info;
+use wsts::bip340::SchnorrProof;
 use crate::bitcoin_node::{LocalhostBitcoinNode, UTXO};
 
 pub fn create_script_refund(
@@ -57,39 +58,6 @@ pub fn get_current_block_height(client: &LocalhostBitcoinNode) -> u64 {
     client.get_block_count().unwrap()
 }
 
-pub fn sign_key_tx(
-    secp: &Secp256k1<All>,
-    tx_ref: &Transaction,
-    prevouts: &Prevouts<TxOut>,
-    key_pair_internal: &KeyPair,
-    tap_info: &TaprootSpendInfo,
-) -> Vec<u8> {
-    let mut tx = tx_ref.clone();
-    let sighash_sig = SighashCache::new(&mut tx.clone())
-        .taproot_key_spend_signature_hash(0, prevouts, SchnorrSighashType::AllPlusAnyoneCanPay) // or All
-        .unwrap();
-
-    let tweak_key_pair = key_pair_internal.tap_tweak(secp, tap_info.merkle_root());
-    // then sig
-    let msg = Message::from_slice(&sighash_sig).unwrap();
-
-    let sig = secp.sign_schnorr(&msg, &tweak_key_pair.to_inner());
-
-    //verify sig
-    secp.verify_schnorr(&sig, &msg, &tweak_key_pair.to_inner().x_only_public_key().0)
-        .unwrap();
-
-    // then witness
-    let schnorr_sig = SchnorrSig {
-        sig,
-        hash_ty: SchnorrSighashType::AllPlusAnyoneCanPay, // or All
-    };
-
-    info!("{schnorr_sig:#?}");
-
-    schnorr_sig.serialize()
-}
-
 pub fn create_tx_from_user_to_script (
     outputs_vec: &Vec<UTXO>,
     user_address: &Address,
@@ -129,39 +97,155 @@ pub fn create_tx_from_user_to_script (
 
 pub fn sign_user_to_script_tx (
     secp: &Secp256k1<All>,
-    current_tx: &Transaction,
-    amount: u64,
-    fee: u64,
-    input_index: usize,
-    secret_key: SecretKey,
+    tx_ref: &Transaction,
+    prevouts: &Prevouts<TxOut>,
+    key_pair_internal: &KeyPair,
 ) -> Transaction {
-    let public_key = PublicKey::from_private_key(secp, &PrivateKey::new(secret_key, Network::Regtest));
-
-    let script = Builder::new()
-        .push_opcode(all::OP_DUP)
-        .push_opcode(all::OP_HASH160)
-        .push_slice(&Script::new_v0_p2wpkh(&public_key.wpubkey_hash().unwrap())[2..])
-        .push_opcode(all::OP_EQUALVERIFY)
-        .push_opcode(all::OP_CHECKSIG)
-        .into_script();
-
-    let total_amount = amount + fee;
-
-    let sig_hash = SighashCache::new(&mut current_tx.clone())
-        .segwit_signature_hash(
-            input_index,
-            &script,
-            total_amount,
-            EcdsaSighashType::All,
-        )
+    let mut tx = tx_ref.clone();
+    let sighash_sig = SighashCache::new(&mut tx.clone())
+        .taproot_key_spend_signature_hash(0, prevouts, SchnorrSighashType::AllPlusAnyoneCanPay) // or All
         .unwrap();
 
-    let msg = Message::from_slice(&sig_hash).unwrap();
-    let sig = EcdsaSig::sighash_all(secp.sign_ecdsa(&msg, &secret_key));
+    let tweak_key_pair = key_pair_internal.tap_tweak(secp, None);
+    // then sig
+    let msg = Message::from_slice(&sighash_sig).unwrap();
 
-    let mut tx = current_tx.clone();
+    let sig = secp.sign_schnorr(&msg, &tweak_key_pair.to_inner());
 
-    tx.input[input_index].witness.push(sig.to_vec());
+    //verify sig
+    secp.verify_schnorr(&sig, &msg, &tweak_key_pair.to_inner().x_only_public_key().0)
+        .unwrap();
+
+    // then witness
+    let schnorr_sig = SchnorrSig {
+        sig,
+        hash_ty: SchnorrSighashType::AllPlusAnyoneCanPay, // or All
+    };
+
+    tx.input[0].witness.push(schnorr_sig.serialize());
 
     tx
+}
+
+pub fn sign_script_to_address_tx (
+    secp: &Secp256k1<All>,
+    tx_ref: &Transaction,
+    prevouts: &Prevouts<TxOut>,
+    key_pair_internal: &KeyPair,
+    tap_info: &TaprootSpendInfo,
+) -> Transaction {
+    let mut tx = tx_ref.clone();
+    let sighash_sig = SighashCache::new(&mut tx.clone())
+        .taproot_key_spend_signature_hash(0, prevouts, SchnorrSighashType::AllPlusAnyoneCanPay) // or All
+        .unwrap();
+
+    let tweak_key_pair = key_pair_internal.tap_tweak(secp, tap_info.merkle_root());
+    // then sig
+    let msg = Message::from_slice(&sighash_sig).unwrap();
+
+    let sig = secp.sign_schnorr(&msg, &tweak_key_pair.to_inner());
+
+    //verify sig
+    secp.verify_schnorr(&sig, &msg, &tweak_key_pair.to_inner().x_only_public_key().0)
+        .unwrap();
+
+    // then witness
+    let schnorr_sig = SchnorrSig {
+        sig,
+        hash_ty: SchnorrSighashType::AllPlusAnyoneCanPay, // or All
+    };
+
+    tx.input[0].witness.push(schnorr_sig.serialize());
+
+    tx
+}
+
+pub fn sign_refund_tx(
+    secp: &Secp256k1<All>,
+    tx_ref: &Transaction,
+    prevouts: &Prevouts<TxOut>,
+    script: &Script,
+    key_pair_user: &KeyPair,
+    tap_info: &TaprootSpendInfo,
+    key_pair_internal: &KeyPair,
+) -> Transaction {
+    let mut tx = tx_ref.clone();
+    let sighash_sig = SighashCache::new(&mut tx.clone())
+        .taproot_script_spend_signature_hash(
+            0,
+            prevouts,
+            ScriptPath::with_defaults(script),
+            SchnorrSighashType::AllPlusAnyoneCanPay,
+        )
+        .unwrap();
+    // println!("sighash_sig: {}", sighash_sig);
+    // println!("message: {}", Message::from_slice(&sighash_sig).unwrap());
+    let sig = secp.sign_schnorr(&Message::from_slice(&sighash_sig).unwrap(), key_pair_user);
+    // println!("sig: {}", sig);
+
+    let actual_control = tap_info
+        .control_block(&(script.clone(), LeafVersion::TapScript))
+        .unwrap();
+    // println!("actual_control: {:#?}", actual_control);
+
+    // verify commitment
+    verify_p2tr_commitment(secp, script, key_pair_internal, tap_info, &actual_control);
+
+    let schnorr_sig = SchnorrSig {
+        sig,
+        hash_ty: SchnorrSighashType::AllPlusAnyoneCanPay,
+    };
+
+    let wit = Witness::from_vec(vec![
+        schnorr_sig.to_vec(),
+        script.to_bytes(),
+        actual_control.serialize(),
+    ]);
+
+    tx.input[0].witness = wit;
+
+    tx
+}
+
+fn verify_p2tr_commitment(
+    secp: &Secp256k1<All>,
+    script: &Script,
+    key_pair_internal: &KeyPair,
+    tap_info: &TaprootSpendInfo,
+    actual_control: &ControlBlock,
+) {
+    let tweak_key_pair = key_pair_internal
+        .tap_tweak(&secp, tap_info.merkle_root())
+        .to_inner();
+    let (tweak_key_pair_public_key, _) = tweak_key_pair.x_only_public_key();
+    assert!(actual_control.verify_taproot_commitment(secp, tweak_key_pair_public_key, script));
+}
+
+pub fn create_refund_tx(
+    outputs_vec: &Vec<UTXO>,
+    user_address: &Address,
+    amount: u64,
+    tx_index: usize,
+) -> Transaction {
+    let prev_output_txid_string = &outputs_vec[tx_index].txid;
+    let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
+    let prev_output_vout = outputs_vec[tx_index].vout.clone();
+    let outpoint = OutPoint::new(prev_output_txid, prev_output_vout);
+
+    Transaction {
+        version: 2,
+        lock_time: PackedLockTime(0),
+        input: vec![TxIn {
+            previous_output: outpoint,
+            script_sig: Script::new(),
+            sequence: Sequence(0x8030FFFF),
+            witness: Witness::default(),
+        }],
+        output: vec![
+            TxOut {
+                value: amount,
+                script_pubkey: user_address.script_pubkey(),
+            },
+        ],
+    }
 }
