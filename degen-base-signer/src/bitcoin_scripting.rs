@@ -84,18 +84,18 @@ pub fn create_tx_from_user_to_script (
         }],
         output: vec![
             TxOut {
-                value: amount,
+                value: left_amount,
                 script_pubkey: user_address.script_pubkey(),
             },
             TxOut {
-                value: left_amount,
+                value: amount,
                 script_pubkey: script_address.script_pubkey(),
             }
         ],
     }
 }
 
-pub fn sign_user_to_script_tx (
+pub fn sign_tx_user_to_script(
     secp: &Secp256k1<All>,
     tx_ref: &Transaction,
     prevouts: &Prevouts<TxOut>,
@@ -127,7 +127,8 @@ pub fn sign_user_to_script_tx (
     tx
 }
 
-pub fn sign_script_to_address_tx (
+/// uses key sign
+pub fn sign_tx_script_to_pox(
     secp: &Secp256k1<All>,
     tx_ref: &Transaction,
     prevouts: &Prevouts<TxOut>,
@@ -160,14 +161,15 @@ pub fn sign_script_to_address_tx (
     tx
 }
 
-pub fn sign_refund_tx(
+/// uses script sign
+/// TODO: how to sign multiple inputs using this?
+pub fn sign_tx_script_refund(
     secp: &Secp256k1<All>,
     tx_ref: &Transaction,
     prevouts: &Prevouts<TxOut>,
     script: &Script,
     key_pair_user: &KeyPair,
     tap_info: &TaprootSpendInfo,
-    key_pair_internal: &KeyPair,
 ) -> Transaction {
     let mut tx = tx_ref.clone();
     let sighash_sig = SighashCache::new(&mut tx.clone())
@@ -180,7 +182,8 @@ pub fn sign_refund_tx(
         .unwrap();
     // println!("sighash_sig: {}", sighash_sig);
     // println!("message: {}", Message::from_slice(&sighash_sig).unwrap());
-    let sig = secp.sign_schnorr(&Message::from_slice(&sighash_sig).unwrap(), key_pair_user);
+    let msg = Message::from_slice(&sighash_sig).unwrap();
+    let sig = secp.sign_schnorr(&msg, key_pair_user);
     // println!("sig: {}", sig);
 
     let actual_control = tap_info
@@ -189,7 +192,9 @@ pub fn sign_refund_tx(
     // println!("actual_control: {:#?}", actual_control);
 
     // verify commitment
-    verify_p2tr_commitment(secp, script, key_pair_internal, tap_info, &actual_control);
+    // TODO: modify verify_p2tr_commitment to not use key_pair_internal
+    // we don't have private/secret key for aggregated key in refund path
+    // verify_p2tr_commitment(secp, script, key_pair_internal, tap_info, &actual_control);
 
     let schnorr_sig = SchnorrSig {
         sig,
@@ -224,13 +229,15 @@ fn verify_p2tr_commitment(
 pub fn create_refund_tx(
     outputs_vec: &Vec<UTXO>,
     user_address: &Address,
-    amount: u64,
+    fee: u64,
     tx_index: usize,
 ) -> Transaction {
     let prev_output_txid_string = &outputs_vec[tx_index].txid;
     let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
     let prev_output_vout = outputs_vec[tx_index].vout.clone();
     let outpoint = OutPoint::new(prev_output_txid, prev_output_vout);
+
+    let left_amount = &outputs_vec[tx_index].amount - fee;
 
     Transaction {
         version: 2,
@@ -243,7 +250,7 @@ pub fn create_refund_tx(
         }],
         output: vec![
             TxOut {
-                value: amount,
+                value: left_amount,
                 script_pubkey: user_address.script_pubkey(),
             },
         ],

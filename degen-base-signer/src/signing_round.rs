@@ -47,7 +47,7 @@ use crate::{
     util::{decrypt, encrypt, make_shared_secret},
 };
 use crate::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode, UTXO};
-use crate::bitcoin_scripting::{create_refund_tx, create_script_refund, create_script_unspendable, create_tree, create_tx_from_user_to_script, get_current_block_height, sign_user_to_script_tx};
+use crate::bitcoin_scripting::{create_refund_tx, create_script_refund, create_script_unspendable, create_tree, create_tx_from_user_to_script, get_current_block_height, sign_tx_user_to_script};
 use crate::bitcoin_wallet::BitcoinWallet;
 use crate::peg_wallet::BitcoinWallet as BitcoinWalletTrait;
 use crate::stacks_node::client::NodeClient;
@@ -852,7 +852,7 @@ impl SigningRound {
         // here should be the creation of bitcoin script
         let script_1 = create_script_refund(
             &self.bitcoin_xonly_public_key,
-            0,
+            100,
         );
         let script_2 = create_script_unspendable();
 
@@ -865,52 +865,54 @@ impl SigningRound {
 
         // TODO: send amount from user to script
 
-        let unspent_list_signer = self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()).expect("Failed to get unspent list for signer.");
-
-        let mut unspent_list_txout: Vec<TxOut> = vec![];
-        unspent_list_signer.iter().for_each(|utxo| {
-            unspent_list_txout.push(TxOut {
-                value: utxo.amount,
-                script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
-            });
-        });
-
-        let prevouts_signer = Prevouts::One(0, unspent_list_txout[0].clone());
-        info!("{prevouts_signer:#?}");
-
-        let amount_to_script: u64 = 1000;
-        let fee: u64 = 300;
-
-        let user_to_script_unsigned = create_tx_from_user_to_script(
-            &unspent_list_signer,
-            &self.bitcoin_wallet.address(),
-            &script_address,
-            amount_to_script,
-            fee,
-            0);
-
-        let user_to_script_signed = sign_user_to_script_tx(
-            &secp,
-            &user_to_script_unsigned,
-            &prevouts_signer,
-            &keypair,
-        );
-
-        info!("{user_to_script_signed:#?}");
-        let txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed);
-        info!("{txid:#?}");
+        // let unspent_list_signer = self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()).expect("Failed to get unspent list for signer.");
+        //
+        // let mut unspent_list_txout: Vec<TxOut> = vec![];
+        // unspent_list_signer.iter().for_each(|utxo| {
+        //     unspent_list_txout.push(TxOut {
+        //         value: utxo.amount,
+        //         script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
+        //     });
+        // });
+        //
+        // let prevouts_signer = Prevouts::One(0, unspent_list_txout[0].clone());
+        //
+        // let amount_to_script: u64 = 1000;
+        // let fee: u64 = 300;
+        //
+        // let user_to_script_unsigned = create_tx_from_user_to_script(
+        //     &unspent_list_signer,
+        //     &self.bitcoin_wallet.address(),
+        //     &script_address,
+        //     amount_to_script,
+        //     fee,
+        //     0);
+        //
+        // let user_to_script_signed = sign_tx_user_to_script(
+        //     &secp,
+        //     &user_to_script_unsigned,
+        //     &prevouts_signer,
+        //     &keypair,
+        // );
+        //
+        // let txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed);
+        // info!("{txid:#?}");
 
         let unspent_list_refund = self.local_bitcoin_node.list_unspent(&script_address).expect("Failed to get unspent list for script.");
 
+        info!("{unspent_list_refund:#?}");
+
         let mut unspent_list_refund_txout: Vec<TxOut> = vec![];
-        unspent_list_refund_txout.iter().for_each(|utxo| {
+        unspent_list_refund.iter().for_each(|utxo| {
             unspent_list_refund_txout.push(TxOut {
                 value: utxo.amount,
                 script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
             });
         });
 
-        let refund_tx = create_refund_tx();
+        // let refund_tx = create_refund_tx();
+
+
 
         // let user_to_script_txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_unsigned);
         //
