@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use bdk::miniscript::psbt::SighashError;
-use bitcoin::{EcdsaSighashType, KeyPair, Network, PrivateKey, PublicKey, SchnorrSighashType, Script, TxOut, Witness, XOnlyPublicKey};
+use bitcoin::{EcdsaSighashType, KeyPair, Network, OutPoint, PrivateKey, PublicKey, SchnorrSighashType, Script, TxOut, Witness, XOnlyPublicKey};
 use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::Builder;
 use bitcoin::consensus::serialize;
@@ -47,7 +47,7 @@ use crate::{
     util::{decrypt, encrypt, make_shared_secret},
 };
 use crate::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode, UTXO};
-use crate::bitcoin_scripting::{create_refund_tx, create_script_refund, create_script_unspendable, create_tree, create_tx_from_user_to_script, get_current_block_height, sign_tx_user_to_script};
+use crate::bitcoin_scripting::{create_refund_tx, create_script_refund, create_script_unspendable, create_tree, create_tx_from_user_to_script, get_current_block_height, sign_tx_script_refund, sign_tx_user_to_script};
 use crate::bitcoin_wallet::BitcoinWallet;
 use crate::peg_wallet::BitcoinWallet as BitcoinWalletTrait;
 use crate::stacks_node::client::NodeClient;
@@ -865,52 +865,62 @@ impl SigningRound {
 
         // TODO: send amount from user to script
 
-        // let unspent_list_signer = self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()).expect("Failed to get unspent list for signer.");
-        //
-        // let mut unspent_list_txout: Vec<TxOut> = vec![];
-        // unspent_list_signer.iter().for_each(|utxo| {
-        //     unspent_list_txout.push(TxOut {
-        //         value: utxo.amount,
-        //         script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
-        //     });
-        // });
-        //
-        // let prevouts_signer = Prevouts::One(0, unspent_list_txout[0].clone());
-        //
-        // let amount_to_script: u64 = 1000;
-        // let fee: u64 = 300;
-        //
-        // let user_to_script_unsigned = create_tx_from_user_to_script(
-        //     &unspent_list_signer,
-        //     &self.bitcoin_wallet.address(),
-        //     &script_address,
-        //     amount_to_script,
-        //     fee,
-        //     0);
-        //
-        // let user_to_script_signed = sign_tx_user_to_script(
-        //     &secp,
-        //     &user_to_script_unsigned,
-        //     &prevouts_signer,
-        //     &keypair,
-        // );
-        //
-        // let txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed);
-        // info!("{txid:#?}");
+        let unspent_list_signer = self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()).expect("Failed to get unspent list for signer.");
 
-        let unspent_list_refund = self.local_bitcoin_node.list_unspent(&script_address).expect("Failed to get unspent list for script.");
-
-        info!("{unspent_list_refund:#?}");
-
-        let mut unspent_list_refund_txout: Vec<TxOut> = vec![];
-        unspent_list_refund.iter().for_each(|utxo| {
-            unspent_list_refund_txout.push(TxOut {
+        let mut unspent_list_txout: Vec<TxOut> = vec![];
+        unspent_list_signer.iter().for_each(|utxo| {
+            unspent_list_txout.push(TxOut {
                 value: utxo.amount,
                 script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
             });
         });
 
-        // let refund_tx = create_refund_tx();
+        let prevouts_signer = Prevouts::One(0, unspent_list_txout[0].clone());
+
+        let amount_to_script: u64 = 1000;
+        let fee: u64 = 300;
+
+        let (user_to_script_unsigned, amount_left) = create_tx_from_user_to_script(
+            &unspent_list_signer,
+            &self.bitcoin_wallet.address(),
+            &script_address,
+            amount_to_script,
+            fee,
+            0);
+
+        let user_to_script_signed = sign_tx_user_to_script(
+            &secp,
+            &user_to_script_unsigned,
+            &prevouts_signer,
+            &keypair,
+        );
+
+        let txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed).unwrap();
+        info!("{txid:#?}");
+
+        // let unspent_list_refund = self.local_bitcoin_node.list_unspent(&script_address).expect("Failed to get unspent list for script.");
+        //
+        // info!("{unspent_list_refund:#?}");
+
+        // let mut unspent_list_refund_txout: Vec<TxOut> = vec![];
+        // unspent_list_refund.iter().for_each(|utxo| {
+        //     unspent_list_refund_txout.push(TxOut {
+        //         value: utxo.amount,
+        //         script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
+        //     });
+        // });
+        let outpoint = OutPoint::new(txid, 1);
+        info!("{outpoint:#?}");
+        info!("{:#?}\n{:#?}", self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()), &amount_left);
+        let refund_tx = create_refund_tx(outpoint, self.bitcoin_wallet.address(), amount_left, fee, 0);
+
+        let prevout = Prevouts::One(0, TxOut {value: amount_left, script_pubkey: script_address.script_pubkey()});
+
+        let signed_tx = sign_tx_script_refund(&secp, &refund_tx, &prevout, &script_1, &keypair, &tap_info);
+
+        let signed_txid = self.local_bitcoin_node.broadcast_transaction(&signed_tx);
+        info!("{:#?}", self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()));
+        info!("{signed_txid:#?}");
 
 
 

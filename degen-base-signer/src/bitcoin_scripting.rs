@@ -65,7 +65,7 @@ pub fn create_tx_from_user_to_script (
     amount: u64,
     fee: u64,
     tx_index: usize,
-) -> Transaction {
+) -> (Transaction, u64) {
     let prev_output_txid_string = &outputs_vec[tx_index].txid;
     let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
     let prev_output_vout = outputs_vec[tx_index].vout.clone();
@@ -73,7 +73,7 @@ pub fn create_tx_from_user_to_script (
 
     let left_amount = &outputs_vec[tx_index].amount - amount - fee;
 
-    Transaction {
+    (Transaction {
         version: 2,
         lock_time: PackedLockTime(0),
         input: vec![TxIn {
@@ -92,7 +92,7 @@ pub fn create_tx_from_user_to_script (
                 script_pubkey: script_address.script_pubkey(),
             }
         ],
-    }
+    }, left_amount)
 }
 
 pub fn sign_tx_user_to_script(
@@ -227,21 +227,24 @@ fn verify_p2tr_commitment(
 }
 
 pub fn create_refund_tx(
-    outputs_vec: &Vec<UTXO>,
+    // outputs_vec: &Vec<UTXO>,
+    outpoint: OutPoint,
     user_address: &Address,
+    amount_left: u64,
     fee: u64,
     tx_index: usize,
 ) -> Transaction {
-    let prev_output_txid_string = &outputs_vec[tx_index].txid;
-    let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
-    let prev_output_vout = outputs_vec[tx_index].vout.clone();
-    let outpoint = OutPoint::new(prev_output_txid, prev_output_vout);
+    // let prev_output_txid_string = &outputs_vec[tx_index].txid;
+    // let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
+    // let prev_output_vout = outputs_vec[tx_index].vout.clone();
+    // let outpoint = OutPoint::new(prev_output_txid, prev_output_vout);
 
-    let left_amount = &outputs_vec[tx_index].amount - fee;
+    // let left_amount = &outputs_vec[tx_index].amount - fee;
+    let amount = amount_left - fee;
 
     Transaction {
         version: 2,
-        lock_time: PackedLockTime(0),
+        lock_time: PackedLockTime(100),
         input: vec![TxIn {
             previous_output: outpoint,
             script_sig: Script::new(),
@@ -250,7 +253,7 @@ pub fn create_refund_tx(
         }],
         output: vec![
             TxOut {
-                value: left_amount,
+                value: amount,
                 script_pubkey: user_address.script_pubkey(),
             },
         ],
