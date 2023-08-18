@@ -848,8 +848,7 @@ impl SigningRound {
         // let current_block_height = get_current_block_height(&self.local_bitcoin_node);
         let secp = Secp256k1::new();
         let keypair = KeyPair::from_secret_key(&secp, &self.bitcoin_private_key);
-        // create script
-        // here should be the creation of bitcoin script
+
         let script_1 = create_script_refund(
             &self.bitcoin_xonly_public_key,
             100,
@@ -862,8 +861,6 @@ impl SigningRound {
             &script_1,
             &script_2,
         );
-
-        // TODO: send amount from user to script
 
         let unspent_list_signer = self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()).expect("Failed to get unspent list for signer.");
 
@@ -896,30 +893,18 @@ impl SigningRound {
         );
 
         let txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed).unwrap();
+
         info!("{txid:#?}");
 
-        // let unspent_list_refund = self.local_bitcoin_node.list_unspent(&script_address).expect("Failed to get unspent list for script.");
-        //
-        // info!("{unspent_list_refund:#?}");
-
-        // let mut unspent_list_refund_txout: Vec<TxOut> = vec![];
-        // unspent_list_refund.iter().for_each(|utxo| {
-        //     unspent_list_refund_txout.push(TxOut {
-        //         value: utxo.amount,
-        //         script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
-        //     });
-        // });
         let outpoint = OutPoint::new(txid, 1);
-        info!("{outpoint:#?}");
-        info!("{:#?}\n{:#?}", self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()), &amount_left);
-        let refund_tx = create_refund_tx(outpoint, self.bitcoin_wallet.address(), amount_left, fee, 0);
+
+        let refund_tx = create_refund_tx(outpoint, self.bitcoin_wallet.address(), amount_left, fee);
 
         let prevout = Prevouts::One(0, TxOut {value: amount_left, script_pubkey: script_address.script_pubkey()});
 
         let signed_tx = sign_tx_script_refund(&secp, &refund_tx, &prevout, &script_1, &keypair, &tap_info);
 
-        let signed_txid = self.local_bitcoin_node.broadcast_transaction(&signed_tx);
-        info!("{:#?}", self.local_bitcoin_node.list_unspent(&self.bitcoin_wallet.address()));
+        let signed_txid = self.local_bitcoin_node.broadcast_transaction(&signed_tx).unwrap();
         info!("{signed_txid:#?}");
 
 

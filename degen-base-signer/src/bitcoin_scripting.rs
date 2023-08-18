@@ -1,16 +1,14 @@
 use std::str::FromStr;
 use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::Builder;
-use bitcoin::secp256k1::{All, Message, Secp256k1, SecretKey};
-use bitcoin::{Address, EcdsaSig, EcdsaSighashType, KeyPair, Network, OutPoint, PackedLockTime, PrivateKey, PublicKey, SchnorrSig, SchnorrSighashType, Script, Sequence, Transaction, Txid, TxIn, TxOut, Witness, XOnlyPublicKey};
-use bitcoin::psbt::{Input, PartiallySignedTransaction, Prevouts};
+use bitcoin::secp256k1::{All, Message, Secp256k1};
+use bitcoin::{Address, KeyPair, Network, OutPoint, PackedLockTime, SchnorrSig, SchnorrSighashType, Script, Sequence, Transaction, Txid, TxIn, TxOut, Witness, XOnlyPublicKey};
+use bitcoin::psbt::Prevouts;
 use bitcoin::psbt::serialize::Serialize;
 use bitcoin::schnorr::TapTweak;
 use bitcoin::util::sighash::{ScriptPath, SighashCache};
 use bitcoin::util::taproot;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TaprootSpendInfo};
-use tracing::info;
-use wsts::bip340::SchnorrProof;
 use crate::bitcoin_node::{LocalhostBitcoinNode, UTXO};
 
 pub fn create_script_refund(
@@ -66,10 +64,10 @@ pub fn create_tx_from_user_to_script (
     fee: u64,
     tx_index: usize,
 ) -> (Transaction, u64) {
-    let prev_output_txid_string = &outputs_vec[tx_index].txid;
-    let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
-    let prev_output_vout = outputs_vec[tx_index].vout.clone();
-    let outpoint = OutPoint::new(prev_output_txid, prev_output_vout);
+    let outpoint = OutPoint::new(
+        Txid::from_str(&outputs_vec[tx_index].txid.as_str()).unwrap(), 
+        outputs_vec[tx_index].vout.clone()
+    );
 
     let left_amount = &outputs_vec[tx_index].amount - amount - fee;
 
@@ -84,11 +82,11 @@ pub fn create_tx_from_user_to_script (
         }],
         output: vec![
             TxOut {
-                value: left_amount,
+                value: amount,
                 script_pubkey: user_address.script_pubkey(),
             },
             TxOut {
-                value: amount,
+                value: left_amount,
                 script_pubkey: script_address.script_pubkey(),
             }
         ],
@@ -194,7 +192,7 @@ pub fn sign_tx_script_refund(
     // verify commitment
     // TODO: modify verify_p2tr_commitment to not use key_pair_internal
     // we don't have private/secret key for aggregated key in refund path
-    // verify_p2tr_commitment(secp, script, key_pair_internal, tap_info, &actual_control);
+    verify_p2tr_commitment(secp, script, key_pair_user, tap_info, &actual_control);
 
     let schnorr_sig = SchnorrSig {
         sig,
@@ -215,11 +213,11 @@ pub fn sign_tx_script_refund(
 fn verify_p2tr_commitment(
     secp: &Secp256k1<All>,
     script: &Script,
-    key_pair_internal: &KeyPair,
+    key_pair_user: &KeyPair,
     tap_info: &TaprootSpendInfo,
     actual_control: &ControlBlock,
 ) {
-    let tweak_key_pair = key_pair_internal
+    let tweak_key_pair = key_pair_user
         .tap_tweak(&secp, tap_info.merkle_root())
         .to_inner();
     let (tweak_key_pair_public_key, _) = tweak_key_pair.x_only_public_key();
@@ -232,7 +230,6 @@ pub fn create_refund_tx(
     user_address: &Address,
     amount_left: u64,
     fee: u64,
-    tx_index: usize,
 ) -> Transaction {
     // let prev_output_txid_string = &outputs_vec[tx_index].txid;
     // let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
