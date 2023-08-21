@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::time::Duration;
-use bitcoin::Address;
+use bitcoin::{Address, Txid};
 use blockstack_lib::burnchains::bitcoin::address::BitcoinAddress;
 
 use degen_base_signer::config::{Config, Error as ConfigError};
@@ -177,22 +177,27 @@ where
         Ok(())
     }
 
-    fn wait_for_create_scripts(&mut self) -> Result<Vec<Address>, Error> {
-        // wait for the response from signers
+    fn wait_for_create_scripts(&mut self) -> Result<Vec<Txid>, Error> {
+        let mut ids_to_await: HashSet<u32> = (1..=self.total_signers).collect();
+        let mut txids = vec![];
 
-        // insert each key to the corresponding signer based on his public key
-        Ok(vec![])
+        while !ids_to_await.is_empty() {
+            if let MessageTypes::DegensCreateScriptsResponse(response) = self.wait_for_next_message()?.msg {
+                ids_to_await.remove(&response.signer_id);
+                txids.push(response.txid);
+            }
+        }
+        Ok(txids)
     }
 
-    pub fn run_create_scripts_generation(&mut self) -> Result<Vec<Address>, Error> {
+    pub fn run_create_scripts_generation(&mut self) -> Result<Vec<Txid>, Error> {
         // things to be done by coordinator
         info!("Starting to create scripts");
-        self.start_scripts();
+        self.start_scripts().unwrap();
 
+        let txids = self.wait_for_create_scripts().unwrap();
 
-        let addresses = self.wait_for_create_scripts().unwrap();
-        // populate this
-        Ok(vec![])
+        Ok(txids)
     }
 
     fn start_public_shares(&mut self) -> Result<(), Error> {

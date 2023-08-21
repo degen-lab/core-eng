@@ -1,7 +1,7 @@
 use bitcoin::{psbt::Prevouts, util::{
     base58,
     sighash::{Error as SighashError, SighashCache},
-}, SchnorrSighashType, XOnlyPublicKey, Address};
+}, SchnorrSighashType, XOnlyPublicKey, Address, Txid};
 use blockstack_lib::{types::chainstate::StacksAddress, util::secp256k1::Secp256k1PublicKey};
 use degen_base_coordinator::{
     coordinator::Error as FrostCoordinatorError, create_coordinator, create_coordinator_from_path,
@@ -276,9 +276,11 @@ impl StacksCoordinator {
         Ok(self.frost_coordinator.sign_message(message.as_bytes())?)
     }
 
-    pub fn run_create_script(&mut self) -> Result<Vec<Address>> {
-        let mut addresses = self.frost_coordinator.run_create_scripts_generation().unwrap();
-        Ok(addresses)
+    pub fn run_create_script(&mut self) -> Result<Vec<Txid>> {
+        let mut txids = self.frost_coordinator.run_create_scripts_generation().unwrap();
+        info!("{txids:#?}");
+        // TODO: create and sign tx
+        Ok(txids)
     }
 }
 

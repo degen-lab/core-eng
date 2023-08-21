@@ -82,11 +82,11 @@ pub fn create_tx_from_user_to_script (
         }],
         output: vec![
             TxOut {
-                value: amount,
+                value: left_amount,
                 script_pubkey: user_address.script_pubkey(),
             },
             TxOut {
-                value: left_amount,
+                value: amount,
                 script_pubkey: script_address.script_pubkey(),
             }
         ],

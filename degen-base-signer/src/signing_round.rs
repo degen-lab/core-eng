@@ -19,7 +19,8 @@ use bitcoin::psbt::{PartiallySignedTransaction, Prevouts};
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::{base58, taproot};
-use blockstack_lib::burnchains::{Address, BurnchainBlockHeader, BurnchainTransaction, PrivateKey as PrivateKeyTrait, Txid};
+use bitcoin::Txid;
+use blockstack_lib::burnchains::{Address, BurnchainBlockHeader, BurnchainTransaction, PrivateKey as PrivateKeyTrait};
 use blockstack_lib::burnchains::bitcoin::{BitcoinNetworkType, BitcoinTransaction, BitcoinTxOutput};
 use blockstack_lib::burnchains::bitcoin::address::{BitcoinAddress, SegwitBitcoinAddress};
 use blockstack_lib::chainstate::burn::Opcodes;
@@ -378,19 +379,15 @@ impl Signable for DegensScriptRequest {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DegensScriptResponse {
-    pub dkg_id: u64,
-    pub public_key: XOnlyPublicKey,
-    pub script: BitcoinAddress,
-    pub block_height: u64,
+    pub txid: Txid,
+    pub signer_id: u32,
 }
 
 impl Signable for DegensScriptResponse {
     fn hash(&self, hasher: &mut Sha256) {
         hasher.update("DEGENS_CREATE_SCRIPT_RESPONSE".as_bytes());
-        hasher.update(self.dkg_id.to_be_bytes());
-        hasher.update(self.public_key.to_string());
-        hasher.update(self.script.to_string()); // TODO: check if alright
-        hasher.update(self.block_height.to_be_bytes());
+        hasher.update(self.txid.to_vec().as_slice());
+        hasher.update(self.signer_id.to_be_bytes());
     }
 }
 
@@ -894,18 +891,31 @@ impl SigningRound {
 
         let txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed).unwrap();
 
-        info!("{txid:#?}");
+        let mut msgs = vec![];
 
-        let outpoint = OutPoint::new(txid, 1);
+        let txids = DegensScriptResponse {
+            txid,
+            signer_id: self.signer.signer_id,
+        };
 
-        let refund_tx = create_refund_tx(outpoint, self.bitcoin_wallet.address(), amount_left, fee);
+        let txids = MessageTypes::DegensCreateScriptsResponse(txids);
+        msgs.push(txids);
 
-        let prevout = Prevouts::One(0, TxOut {value: amount_left, script_pubkey: script_address.script_pubkey()});
+        Ok(msgs)
 
-        let signed_tx = sign_tx_script_refund(&secp, &refund_tx, &prevout, &script_1, &keypair, &tap_info);
 
-        let signed_txid = self.local_bitcoin_node.broadcast_transaction(&signed_tx).unwrap();
-        info!("{signed_txid:#?}");
+
+        // TODO: THIS IS WORKING
+        // let outpoint = OutPoint::new(txid, 1);
+        //
+        // let refund_tx = create_refund_tx(outpoint, self.bitcoin_wallet.address(), amount_left, fee);
+        //
+        // let prevout = Prevouts::One(0, TxOut {value: amount_left, script_pubkey: script_address.script_pubkey()});
+        //
+        // let signed_tx = sign_tx_script_refund(&secp, &refund_tx, &prevout, &script_1, &keypair, &tap_info);
+        //
+        // let signed_txid = self.local_bitcoin_node.broadcast_transaction(&signed_tx).unwrap();
+        // info!("{signed_txid:#?}");
 
 
 
@@ -1036,7 +1046,7 @@ impl SigningRound {
 
 
         // how do we want to return the addresses? change type? all functions have this return type
-        Ok(vec![])
+        // Ok(vec![])
     }
 
 }
