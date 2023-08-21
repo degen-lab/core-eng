@@ -1,7 +1,7 @@
 use bitcoin::{psbt::Prevouts, util::{
     base58,
     sighash::{Error as SighashError, SighashCache},
-}, SchnorrSighashType, XOnlyPublicKey, Address, Txid};
+}, SchnorrSighashType, XOnlyPublicKey, Address, Txid, PackedLockTime, TxIn, Script, Sequence, Witness, TxOut, OutPoint};
 use blockstack_lib::{types::chainstate::StacksAddress, util::secp256k1::Secp256k1PublicKey};
 use degen_base_coordinator::{
     coordinator::Error as FrostCoordinatorError, create_coordinator, create_coordinator_from_path,
@@ -19,6 +19,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
+use std::str::FromStr;
 use tracing::{debug, info, warn};
 use wsts::{bip340::SchnorrProof, common::Signature, field::Element, Point, Scalar};
 
@@ -248,6 +249,46 @@ trait CoordinatorHelpers: Coordinator {
             }
         }
     }
+
+    fn sign_tx_from_script(
+        &mut self,
+        op: &stacks_node::PegOutRequestOp,
+    ) -> Result<BitcoinTransaction> {
+        let utxos = self
+            .bitcoin_node()
+            .list_unspent(self.fee_wallet().bitcoin().address())?;
+
+        // Build unsigned fulfilled peg out transaction
+        let (mut tx, prevouts) = self.fee_wallet().bitcoin().fulfill_peg_out(op, utxos)?;
+        let sighash_tx = tx.clone();
+        let mut sighash_cache = SighashCache::new(&sighash_tx);
+        // Sign the transaction
+        for index in 0..tx.input.len() {
+            let taproot_sighash = sighash_cache
+                .taproot_key_spend_signature_hash(
+                    index,
+                    &Prevouts::All(&prevouts),
+                    SchnorrSighashType::Default,
+                )
+                .map_err(Error::SigningError)?;
+            let (_frost_sig, schnorr_proof) = self
+                .frost_coordinator_mut()
+                .sign_message(&taproot_sighash.as_hash())?;
+
+            debug!(
+                "Fulfill Tx {:?} SchnorrProof ({},{})",
+                &tx, schnorr_proof.r, schnorr_proof.s
+            );
+
+            let finalized = schnorr_proof.to_bytes();
+            let finalized_b58 = base58::encode_slice(&finalized);
+            debug!("CALC SIG ({}) {}", finalized.len(), finalized_b58);
+
+            tx.input[index].witness.push(finalized);
+        }
+        //Return the signed transaction
+        Ok(tx)
+    }
 }
 
 impl<T: Coordinator> CoordinatorHelpers for T {}
@@ -278,9 +319,59 @@ impl StacksCoordinator {
 
     pub fn run_create_script(&mut self) -> Result<Vec<Txid>> {
         let mut txids = self.frost_coordinator.run_create_scripts_generation().unwrap();
-        info!("{txids:#?}");
-        // TODO: create and sign tx
+
+        let tx = create_tx_from_txids(
+            vec![
+                &Address::from_str("bcrt1phvt5tfz4hlkth0k7ls9djweuv9rwv5a0s5sa9085umupftnyalxq0zx28d").unwrap(),
+                &Address::from_str("bcrt1pdsavc4yrdq0sdmjcmf7967eeem2ny6vzr4f8m7dyemcvncs0xtwsc85zdq").unwrap()
+            ],
+            &txids,
+            3000,
+            300,
+        );
+
+
+
         Ok(txids)
+    }
+}
+
+fn create_tx_from_txids(
+    user_addresses: Vec<&Address>,
+    txids: &Vec<Txid>,
+    amount: u64,
+    fee: u64,
+) -> BitcoinTransaction {
+    let mut inputs = vec![];
+    let mut outputs = vec![];
+    let amount_to_each_user = (amount - fee) / (user_addresses.len() as u64);
+
+    for txid in txids {
+        let outpoint = OutPoint::new(*txid, 1);
+        inputs.push(
+            TxIn {
+                previous_output: outpoint,
+                script_sig: Script::new(),
+                sequence: Sequence(0x8030FFFF),
+                witness: Witness::default(),
+            }
+        );
+    }
+
+    for address in user_addresses {
+        outputs.push(
+            TxOut {
+                value: amount_to_each_user,
+                script_pubkey: address.script_pubkey(),
+            }
+        )
+    }
+
+    BitcoinTransaction {
+        version: 2,
+        lock_time: PackedLockTime(100),
+        input: inputs,
+        output: outputs,
     }
 }
 
