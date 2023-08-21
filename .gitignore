@@ -5,4 +5,6 @@ Cargo.lock
 *.profraw
 cobertura.xml
 tarpaulin-report.html
+.DS_Store
+.idea
 *~
