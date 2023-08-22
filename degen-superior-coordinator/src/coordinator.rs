@@ -9,7 +9,7 @@ use degen_base_coordinator::{
 use degen_base_signer::{
     config::Config as SignerConfig,
     net::{Error as HttpNetError, HttpNetListen},
-    signing_round::DkgPublicShare,
+    signing_round::{DkgPublicShare, UtxoError},
 };
 use std::{
     collections::BTreeMap,
@@ -37,9 +37,7 @@ use degen_base_signer::{
 };
 
 // Traits in scope
-use degen_base_signer::bitcoin_node::{
-    BitcoinNode, BitcoinTransaction, Error as BitcoinNodeError, LocalhostBitcoinNode,
-};
+use degen_base_signer::bitcoin_node::{BitcoinNode, BitcoinTransaction, Error as BitcoinNodeError, LocalhostBitcoinNode, UTXO};
 use degen_base_signer::peg_queue::{
     Error as PegQueueError, PegQueue, SbtcOp, SqlitePegQueue, SqlitePegQueueError,
 };
@@ -317,22 +315,24 @@ impl StacksCoordinator {
         Ok(self.frost_coordinator.sign_message(message.as_bytes())?)
     }
 
-    pub fn run_create_script(&mut self) -> Result<Vec<Txid>> {
-        let mut txids = self.frost_coordinator.run_create_scripts_generation().unwrap();
-
-        let tx = create_tx_from_txids(
-            vec![
-                &Address::from_str("bcrt1phvt5tfz4hlkth0k7ls9djweuv9rwv5a0s5sa9085umupftnyalxq0zx28d").unwrap(),
-                &Address::from_str("bcrt1pdsavc4yrdq0sdmjcmf7967eeem2ny6vzr4f8m7dyemcvncs0xtwsc85zdq").unwrap()
-            ],
-            &txids,
-            3000,
-            300,
-        );
+    pub fn run_create_script(&mut self) -> Result<UTXO> {
+        let mut utxos = self.frost_coordinator.run_create_scripts_generation().unwrap();
 
 
+        info!("{utxos:#?}");
+        // let tx = create_tx_from_txids(
+        //     vec![
+        //         &Address::from_str("bcrt1phvt5tfz4hlkth0k7ls9djweuv9rwv5a0s5sa9085umupftnyalxq0zx28d").unwrap(),
+        //         &Address::from_str("bcrt1pdsavc4yrdq0sdmjcmf7967eeem2ny6vzr4f8m7dyemcvncs0xtwsc85zdq").unwrap()
+        //     ],
+        //     &txids,
+        //     3000,
+        //     300,
+        // );
 
-        Ok(txids)
+
+
+        Ok(utxos[0].clone().unwrap())
     }
 }
 

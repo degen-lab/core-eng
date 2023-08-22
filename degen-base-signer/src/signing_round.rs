@@ -50,7 +50,7 @@ use crate::{
     util::{decrypt, encrypt, make_shared_secret},
 };
 use crate::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode, UTXO};
-use crate::bitcoin_scripting::{create_refund_tx, create_script_refund, create_script_unspendable, create_tree, create_tx_from_user_to_script, get_current_block_height, sign_tx_script_refund, sign_tx_user_to_script};
+use crate::bitcoin_scripting::{create_refund_tx, create_script_refund, create_script_unspendable, create_tree, create_tx_from_user_to_script, get_current_block_height, get_good_utxo_from_list, sign_tx_script_refund, sign_tx_user_to_script};
 use crate::bitcoin_wallet::BitcoinWallet;
 use crate::peg_wallet::BitcoinWallet as BitcoinWalletTrait;
 use crate::stacks_node::client::NodeClient;
@@ -72,6 +72,12 @@ pub enum Error {
     StateMachineError(#[from] StateMachineError),
     #[error("Error occured during signing: {0}")]
     SigningError(#[from] SighashError),
+}
+
+#[derive(thiserror::Error, Debug, Clone, Serialize, Deserialize)]
+pub enum UtxoError {
+    #[error("Invalid UTXO.")]
+    InvalidUTXO,
 }
 
 pub trait Signable {
@@ -381,15 +387,37 @@ impl Signable for DegensScriptRequest {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DegensScriptResponse {
-    pub txid: Txid,
     pub signer_id: u32,
+    pub utxo: Result<UTXO, UtxoError>,
 }
 
 impl Signable for DegensScriptResponse {
     fn hash(&self, hasher: &mut Sha256) {
         hasher.update("DEGENS_CREATE_SCRIPT_RESPONSE".as_bytes());
-        hasher.update(self.txid.to_vec().as_slice());
         hasher.update(self.signer_id.to_be_bytes());
+
+
+        match &self.utxo {
+            Ok(utxo) => {
+                hasher.update(utxo.address.as_bytes());
+                hasher.update(utxo.txid.as_bytes());
+                hasher.update(utxo.amount.to_be_bytes());
+                hasher.update(utxo.desc.as_bytes());
+                hasher.update(utxo.confirmations.to_be_bytes());
+                hasher.update(utxo.label.as_bytes());
+                hasher.update(utxo.redeemScript.as_bytes());
+                hasher.update(utxo.reused.to_string().as_bytes());
+                hasher.update(utxo.safe.to_string().as_bytes());
+                hasher.update(utxo.scriptPubKey.as_bytes());
+                hasher.update(utxo.solvable.to_string().as_bytes());
+                hasher.update(utxo.spendable.to_string().as_bytes());
+                hasher.update(utxo.vout.to_be_bytes());
+                hasher.update(utxo.witnessScript.as_bytes());
+            }
+            Err(_) => {
+                hasher.update("No good UTXO in the list.".as_bytes());
+            }
+        }
     }
 }
 
@@ -890,21 +918,25 @@ impl SigningRound {
             &prevouts_signer,
             &keypair,
         );
-        let txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed).unwrap();
+        self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed).unwrap();
 
         sleep(Duration::from_secs(self.signer.signer_id as u64));
         self.local_bitcoin_node.load_wallet(&script_address).unwrap();
+
+        let utxos = self.local_bitcoin_node.list_unspent(&script_address).expect("No utxos.");
+
+        let good_utxo = get_good_utxo_from_list(utxos, amount_to_script);
+
         let mut msgs = vec![];
 
-        let txids = DegensScriptResponse {
-            txid,
+        let response = DegensScriptResponse {
             signer_id: self.signer.signer_id,
+            utxo: good_utxo,
         };
 
-        let txids = MessageTypes::DegensCreateScriptsResponse(txids);
-        msgs.push(txids);
+        let response = MessageTypes::DegensCreateScriptsResponse(response);
+        msgs.push(response);
 
-        info!("{:#?}", self.local_bitcoin_node.list_unspent(&script_address));
         Ok(msgs)
 
 

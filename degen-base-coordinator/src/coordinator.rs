@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 use bitcoin::{Address, Txid};
 use blockstack_lib::burnchains::bitcoin::address::BitcoinAddress;
+use degen_base_signer::signing_round::UtxoError;
 
 use degen_base_signer::config::{Config, Error as ConfigError};
 use degen_base_signer::{
@@ -22,6 +23,7 @@ use wsts::{
     errors::AggregatorError,
     v1, Point, Scalar,
 };
+use degen_base_signer::bitcoin_node::UTXO;
 use degen_base_signer::signing_round::DegensScriptRequest;
 
 #[derive(thiserror::Error, Debug)]
@@ -177,27 +179,27 @@ where
         Ok(())
     }
 
-    fn wait_for_create_scripts(&mut self) -> Result<Vec<Txid>, Error> {
+    fn wait_for_create_scripts(&mut self) -> Result<Vec<Result<UTXO, UtxoError>>, Error> {
         let mut ids_to_await: HashSet<u32> = (1..=self.total_signers).collect();
-        let mut txids = vec![];
+        let mut utxos = vec![];
 
         while !ids_to_await.is_empty() {
             if let MessageTypes::DegensCreateScriptsResponse(response) = self.wait_for_next_message()?.msg {
                 ids_to_await.remove(&response.signer_id);
-                txids.push(response.txid);
+                utxos.push(response.utxo);
             }
         }
-        Ok(txids)
+        Ok(utxos)
     }
 
-    pub fn run_create_scripts_generation(&mut self) -> Result<Vec<Txid>, Error> {
+    pub fn run_create_scripts_generation(&mut self) -> Result<Vec<Result<UTXO, UtxoError>>, Error> {
         // things to be done by coordinator
         info!("Starting to create scripts");
         self.start_scripts().unwrap();
 
-        let txids = self.wait_for_create_scripts().unwrap();
+        let utxos = self.wait_for_create_scripts().unwrap();
 
-        Ok(txids)
+        Ok(utxos)
     }
 
     fn start_public_shares(&mut self) -> Result<(), Error> {

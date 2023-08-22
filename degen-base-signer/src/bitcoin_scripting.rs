@@ -10,6 +10,7 @@ use bitcoin::util::sighash::{ScriptPath, SighashCache};
 use bitcoin::util::taproot;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TaprootSpendInfo};
 use crate::bitcoin_node::{LocalhostBitcoinNode, UTXO};
+use crate::signing_round::UtxoError::InvalidUTXO;
 
 pub fn create_script_refund(
     user_public_key: &XOnlyPublicKey,
@@ -255,4 +256,26 @@ pub fn create_refund_tx(
             },
         ],
     }
+}
+
+pub fn get_good_utxo_from_list(
+    utxos_list: Vec<UTXO>,
+    amount: u64,
+) -> Result<UTXO, crate::signing_round::UtxoError> {
+    let mut found_utxo = false;
+    let mut good_utxo = UTXO::default();
+
+    for utxo in utxos_list {
+        if utxo.amount == amount {
+            good_utxo = utxo;
+            found_utxo = true;
+            break;
+        }
+    };
+
+    if !found_utxo {
+        return Err(InvalidUTXO);
+    }
+
+    Ok(good_utxo)
 }
