@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::thread::sleep;
+use std::time::Duration;
 use bdk::miniscript::psbt::SighashError;
 use bitcoin::{EcdsaSighashType, KeyPair, Network, OutPoint, PrivateKey, PublicKey, SchnorrSighashType, Script, TxOut, Witness, XOnlyPublicKey};
 use bitcoin::blockdata::opcodes::all;
@@ -30,7 +32,7 @@ use blockstack_lib::chainstate::stacks::address::PoxAddress;
 use blockstack_lib::types::chainstate::{BurnchainHeaderHash, StacksAddress};
 use blockstack_lib::util::hash::{Hash160, Sha256Sum};
 use blockstack_lib::vm::ContractName;
-use rand::Rng;
+use rand::{random, Rng};
 use tracing::{debug, info, warn};
 use url::Url;
 pub use wsts;
@@ -888,9 +890,10 @@ impl SigningRound {
             &prevouts_signer,
             &keypair,
         );
-
         let txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_signed).unwrap();
 
+        sleep(Duration::from_secs(self.signer.signer_id as u64));
+        self.local_bitcoin_node.load_wallet(&script_address).unwrap();
         let mut msgs = vec![];
 
         let txids = DegensScriptResponse {
@@ -901,6 +904,7 @@ impl SigningRound {
         let txids = MessageTypes::DegensCreateScriptsResponse(txids);
         msgs.push(txids);
 
+        info!("{:#?}", self.local_bitcoin_node.list_unspent(&script_address));
         Ok(msgs)
 
 
