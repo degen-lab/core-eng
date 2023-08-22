@@ -316,38 +316,51 @@ impl StacksCoordinator {
     }
 
     pub fn run_create_script(&mut self) -> Result<UTXO> {
-        let mut utxos = self.frost_coordinator.run_create_scripts_generation().unwrap();
+        let response_utxos = self.frost_coordinator.run_create_scripts_generation().unwrap();
 
+        let mut utxos= vec![];
 
-        info!("{utxos:#?}");
-        // let tx = create_tx_from_txids(
-        //     vec![
-        //         &Address::from_str("bcrt1phvt5tfz4hlkth0k7ls9djweuv9rwv5a0s5sa9085umupftnyalxq0zx28d").unwrap(),
-        //         &Address::from_str("bcrt1pdsavc4yrdq0sdmjcmf7967eeem2ny6vzr4f8m7dyemcvncs0xtwsc85zdq").unwrap()
-        //     ],
-        //     &txids,
-        //     3000,
-        //     300,
-        // );
+        for utxo in response_utxos {
+            if utxo.clone().unwrap_or(UTXO::default()) == UTXO::default() {
+                // TODO: Check here if someone hasn't sent their utxo
+            }
+            else {
+                utxos.push(utxo.clone().unwrap())
+            }
+        }
 
+        let tx = create_tx_from_txids(
+            vec![
+                &Address::from_str("bcrt1phvt5tfz4hlkth0k7ls9djweuv9rwv5a0s5sa9085umupftnyalxq0zx28d").unwrap(),
+                &Address::from_str("bcrt1pdsavc4yrdq0sdmjcmf7967eeem2ny6vzr4f8m7dyemcvncs0xtwsc85zdq").unwrap()
+            ],
+            &utxos,
+            300,
+        );
 
+        info!("{tx:#?}");
 
-        Ok(utxos[0].clone().unwrap())
+        Ok(utxos[0].clone())
     }
 }
 
 fn create_tx_from_txids(
     user_addresses: Vec<&Address>,
-    txids: &Vec<Txid>,
-    amount: u64,
+    utxos: &Vec<UTXO>,
     fee: u64,
 ) -> BitcoinTransaction {
     let mut inputs = vec![];
     let mut outputs = vec![];
-    let amount_to_each_user = (amount - fee) / (user_addresses.len() as u64);
+    let mut total_amount: u64 = 0;
 
-    for txid in txids {
-        let outpoint = OutPoint::new(*txid, 1);
+    for utxo in utxos {
+        let outpoint = OutPoint::new(
+            Txid::from_str(utxo.txid.as_str()).unwrap(),
+            utxo.vout.clone()
+        );
+
+        total_amount = total_amount + utxo.amount;
+
         inputs.push(
             TxIn {
                 previous_output: outpoint,
@@ -357,6 +370,8 @@ fn create_tx_from_txids(
             }
         );
     }
+
+    let amount_to_each_user = (total_amount - fee) / (user_addresses.len() as u64);
 
     for address in user_addresses {
         outputs.push(
