@@ -170,6 +170,7 @@ where
     fn start_scripts(&mut self) -> Result<(), Error> {
         let create_script = DegensScriptRequest {
             dkg_id: self.current_dkg_id,
+            aggregate_public_key: self.get_aggregate_public_key().unwrap_or(Point::default()),
         };
         let create_scripts_message = Message {
             sig: create_script.sign(&self.network_private_key).expect(""),
@@ -558,7 +559,6 @@ mod test {
     use std::str::FromStr;
     use bitcoin::{KeyPair, Network, PrivateKey, XOnlyPublicKey};
     use blockstack_lib::address::AddressHashMode;
-    use test_utils::parse_env;
 
     use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
     use blockstack_lib::types::chainstate::{StacksAddress, StacksPublicKey};

@@ -250,18 +250,27 @@ trait CoordinatorHelpers: Coordinator {
 
     fn sign_tx_from_script(
         &mut self,
-        op: &stacks_node::PegOutRequestOp,
+        utxos: Vec<UTXO>,
+        // op: &stacks_node::PegOutRequestOp,
+        tx: BitcoinTransaction,
     ) -> Result<BitcoinTransaction> {
-        let utxos = self
-            .bitcoin_node()
-            .list_unspent(self.fee_wallet().bitcoin().address())?;
-
         // Build unsigned fulfilled peg out transaction
-        let (mut tx, prevouts) = self.fee_wallet().bitcoin().fulfill_peg_out(op, utxos)?;
+        // let (mut tx, prevouts) = self.fee_wallet().bitcoin().fulfill_peg_out(op, utxos)?;
+        let mut prevouts: Vec<TxOut> = vec![];
+
+        for utxo in utxos {
+            prevouts.push(TxOut {
+                value: utxo.amount,
+                script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
+            });
+        };
+
+        let mut signed_tx = tx.clone();
+
         let sighash_tx = tx.clone();
         let mut sighash_cache = SighashCache::new(&sighash_tx);
         // Sign the transaction
-        for index in 0..tx.input.len() {
+        for index in 0..sighash_tx.input.len() {
             let taproot_sighash = sighash_cache
                 .taproot_key_spend_signature_hash(
                     index,
@@ -282,10 +291,10 @@ trait CoordinatorHelpers: Coordinator {
             let finalized_b58 = base58::encode_slice(&finalized);
             debug!("CALC SIG ({}) {}", finalized.len(), finalized_b58);
 
-            tx.input[index].witness.push(finalized);
+            signed_tx.input[index].witness.push(finalized);
         }
         //Return the signed transaction
-        Ok(tx)
+        Ok(signed_tx)
     }
 }
 
@@ -315,7 +324,7 @@ impl StacksCoordinator {
         Ok(self.frost_coordinator.sign_message(message.as_bytes())?)
     }
 
-    pub fn run_create_script(&mut self) -> Result<UTXO> {
+    pub fn run_create_script(&mut self) -> Result<u64> {
         let response_utxos = self.frost_coordinator.run_create_scripts_generation().unwrap();
 
         let mut utxos= vec![];
@@ -323,6 +332,9 @@ impl StacksCoordinator {
         for utxo in response_utxos {
             if utxo.clone().unwrap_or(UTXO::default()) == UTXO::default() {
                 // TODO: Check here if someone hasn't sent their utxo
+
+                // function to warn stacks address
+                //
             }
             else {
                 utxos.push(utxo.clone().unwrap())
@@ -338,9 +350,13 @@ impl StacksCoordinator {
             300,
         );
 
-        info!("{tx:#?}");
+        let signed_tx = self.sign_tx_from_script(utxos, tx).unwrap();
+        info!("{:#?}", signed_tx);
+        let txid = self.local_bitcoin_node.broadcast_transaction(&signed_tx);
+        info!("{txid:#?}");
 
-        Ok(utxos[0].clone())
+
+        Ok(0)
     }
 }
 

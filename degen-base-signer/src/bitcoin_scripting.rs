@@ -5,7 +5,7 @@ use bitcoin::secp256k1::{All, Message, Secp256k1};
 use bitcoin::{Address, KeyPair, Network, OutPoint, PackedLockTime, SchnorrSig, SchnorrSighashType, Script, Sequence, Transaction, Txid, TxIn, TxOut, Witness, XOnlyPublicKey};
 use bitcoin::psbt::Prevouts;
 use bitcoin::psbt::serialize::Serialize;
-use bitcoin::schnorr::TapTweak;
+use bitcoin::schnorr::{TapTweak, TweakedPublicKey};
 use bitcoin::util::sighash::{ScriptPath, SighashCache};
 use bitcoin::util::taproot;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TaprootSpendInfo};
@@ -31,7 +31,7 @@ pub fn create_script_unspendable() -> Script {
 
 pub fn create_tree(
     secp: &Secp256k1<All>,
-    internal: &KeyPair, // TODO: degens change to aggregate public key
+    aggregate_x_only: XOnlyPublicKey,
     script_1: &Script,
     script_2: &Script,
 ) -> (TaprootSpendInfo, Address) {
@@ -40,9 +40,11 @@ pub fn create_tree(
         (1, script_2.clone()),
     ]).unwrap(); // TODO: degens - or use unwrap check it
 
-    let (internal_public_key, _) = internal.x_only_public_key();
+    let tap_info = builder.finalize(secp, aggregate_x_only).unwrap();
 
-    let tap_info = builder.finalize(secp, internal_public_key).unwrap();
+    // let tweaked_public_key = TweakedPublicKey::dangerous_assume_tweaked(aggregate_x_only);
+    // let address_tweaked = Address::p2tr_tweaked(tweaked_public_key, Network::Regtest);
+
     let address = Address::p2tr(
         secp,
         tap_info.internal_key(),
