@@ -7,10 +7,10 @@ license = "GPLv3"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-relay-server = { path = "../relay-server" }
+relay-server = { path = "../../relay-server" }
 yarpc = { path = "../yarpc" }
-frost-coordinator = { path = "../frost-coordinator" }
-frost-signer = { path = "../frost-signer" }
+frost-coordinator = { path = "../../frost-coordinator" }
+frost-signer = { path = "../../frost-signer" }
 rand_core = { workspace = true }
 hashbrown = { workspace = true }
 wsts = { workspace = true }

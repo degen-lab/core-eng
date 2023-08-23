@@ -1,5 +1,3 @@
-import json
-
 import click
 import pandas as pd
 from trezorlib.protobuf import to_dict

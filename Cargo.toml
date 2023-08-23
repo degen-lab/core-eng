@@ -1,7 +1,7 @@
 [workspace]
 members = [
   "relay-server",
-  "frost-test",
+    "utils/frost-test",
   "frost-signer",
   "frost-coordinator",
   "sbtc-cli",
