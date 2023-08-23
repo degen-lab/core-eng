@@ -27,7 +27,7 @@ url = { workspace = true }
 rand_core = { workspace = true }
 rand = { workspace = true }
 relay-server = { path = "../relay-server" }
-test-utils = { path = "../test-utils" }
+#test-utils = { path = "../test-utils" }
 
 [lib]
 path = "src/lib.rs"    # The source file of the target

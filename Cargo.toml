@@ -1,15 +1,16 @@
 [workspace]
 members = [
   "relay-server",
-    "utils/frost-test",
-  "frost-signer",
-  "frost-coordinator",
-  "stacks-coordinator",
-  "stacks-signer",
+  "utils/frost-test",
+  "old-tm/frost-signer",
+  "old-tm/frost-coordinator",
+  "old-tm/stacks-coordinator",
+  "old-tm/stacks-signer",
   "degen-base-coordinator",
   "degen-base-signer",
+  "yarpc",
   "degen-superior-coordinator",
-  "degen-superior-signer",
+  "degen-superior-signer"
 ]
 
 [workspace.dependencies]

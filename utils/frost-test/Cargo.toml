@@ -8,9 +8,9 @@ license = "GPLv3"
 
 [dependencies]
 relay-server = { path = "../../relay-server" }
-yarpc = { path = "../yarpc" }
-frost-coordinator = { path = "../../frost-coordinator" }
-frost-signer = { path = "../../frost-signer" }
+yarpc = { path = "../../yarpc" }
+frost-coordinator = { path = "../../old-tm/frost-coordinator" }
+frost-signer = { path = "../../old-tm/frost-signer" }
 rand_core = { workspace = true }
 hashbrown = { workspace = true }
 wsts = { workspace = true }
@@ -20,4 +20,4 @@ hex.workspace = true
 ctrlc = "3.2.5"
 nix = "0.26.2"
 libc = "0.2.139"
-test-utils = { path = "../test-utils" }
+#test-utils = { path = "../test-utils" }
