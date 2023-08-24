@@ -10,6 +10,7 @@ use bitcoin::util::sighash::{ScriptPath, SighashCache};
 use bitcoin::util::taproot;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TaprootSpendInfo};
 use crate::bitcoin_node::{LocalhostBitcoinNode, UTXO};
+use crate::signing_round::Error;
 use crate::signing_round::UtxoError::InvalidUTXO;
 
 pub fn create_script_refund(
@@ -167,48 +168,54 @@ pub fn sign_tx_script_to_pox(
 pub fn sign_tx_script_refund(
     secp: &Secp256k1<All>,
     tx_ref: &Transaction,
-    prevouts: &Prevouts<TxOut>,
+    txout_vec: &Vec<TxOut>,
     script: &Script,
     key_pair_user: &KeyPair,
     tap_info: &TaprootSpendInfo,
 ) -> Transaction {
     let mut tx = tx_ref.clone();
-    let sighash_sig = SighashCache::new(&mut tx.clone())
-        .taproot_script_spend_signature_hash(
-            0,
-            prevouts,
-            ScriptPath::with_defaults(script),
-            SchnorrSighashType::AllPlusAnyoneCanPay,
-        )
-        .unwrap();
-    // println!("sighash_sig: {}", sighash_sig);
-    // println!("message: {}", Message::from_slice(&sighash_sig).unwrap());
-    let msg = Message::from_slice(&sighash_sig).unwrap();
-    let sig = secp.sign_schnorr(&msg, key_pair_user);
-    // println!("sig: {}", sig);
+    let mut input_index: usize = 0;
 
-    let actual_control = tap_info
-        .control_block(&(script.clone(), LeafVersion::TapScript))
-        .unwrap();
-    // println!("actual_control: {:#?}", actual_control);
+    let prevouts = Prevouts::All(txout_vec);
 
-    // verify commitment
-    // TODO: modify verify_p2tr_commitment to not use key_pair_internal
-    // we don't have private/secret key for aggregated key in refund path
-    verify_p2tr_commitment(secp, script, key_pair_user, tap_info, &actual_control);
+    for txout in txout_vec {
+        let sighash_sig = SighashCache::new(&mut tx.clone())
+            .taproot_script_spend_signature_hash(
+                input_index,
+                &prevouts,
+                ScriptPath::with_defaults(script),
+                SchnorrSighashType::AllPlusAnyoneCanPay,
+            )
+            .unwrap();
+        // println!("sighash_sig: {}", sighash_sig);
+        // println!("message: {}", Message::from_slice(&sighash_sig).unwrap());
+        let msg = Message::from_slice(&sighash_sig).unwrap();
+        let sig = secp.sign_schnorr(&msg, key_pair_user);
+        // println!("sig: {}", sig);
 
-    let schnorr_sig = SchnorrSig {
-        sig,
-        hash_ty: SchnorrSighashType::AllPlusAnyoneCanPay,
-    };
+        let actual_control = tap_info
+            .control_block(&(script.clone(), LeafVersion::TapScript))
+            .unwrap();
 
-    let wit = Witness::from_vec(vec![
-        schnorr_sig.to_vec(),
-        script.to_bytes(),
-        actual_control.serialize(),
-    ]);
+        // TODO: verify_p2tr_commitment works with key_pair_internal but not with key_pair_from_script
+        // we don't have private/secret key for aggregated key in refund path
+        // modifiy it to work with it or remove it
+        // verify_p2tr_commitment(secp, script, key_pair_user, tap_info, &actual_control);
 
-    tx.input[0].witness = wit;
+        let schnorr_sig = SchnorrSig {
+            sig,
+            hash_ty: SchnorrSighashType::AllPlusAnyoneCanPay,
+        };
+
+        let wit = Witness::from_vec(vec![
+            schnorr_sig.to_vec(),
+            script.to_bytes(),
+            actual_control.serialize(),
+        ]);
+
+        tx.input[input_index].witness = wit;
+        input_index += 1;
+    }
 
     tx
 }
@@ -229,35 +236,49 @@ fn verify_p2tr_commitment(
 
 pub fn create_refund_tx(
     // outputs_vec: &Vec<UTXO>,
-    outpoint: OutPoint,
+    utxos: &Vec<UTXO>,
     user_address: &Address,
-    amount_left: u64,
     fee: u64,
-) -> Transaction {
-    // let prev_output_txid_string = &outputs_vec[tx_index].txid;
-    // let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
-    // let prev_output_vout = outputs_vec[tx_index].vout.clone();
-    // let outpoint = OutPoint::new(prev_output_txid, prev_output_vout);
+) -> Result<Transaction, Error> {
+    let mut inputs = vec![];
+    let mut amount: u64 = 0;
 
-    // let left_amount = &outputs_vec[tx_index].amount - fee;
-    let amount = amount_left - fee;
+    for utxo in utxos {
+        let prev_output_txid_string = &utxo.txid;
+        let prev_output_txid = Txid::from_str(prev_output_txid_string.as_str()).unwrap();
+        let prev_output_vout = utxo.vout.clone();
+        let outpoint = OutPoint::new(prev_output_txid, prev_output_vout);
 
-    Transaction {
+        amount += utxo.amount;
+
+        inputs.push(
+            TxIn {
+                previous_output: outpoint,
+                script_sig: Script::new(),
+                sequence: Sequence(0x8030FFFF),
+                witness: Witness::default(),
+            }
+        )
+    }
+
+    if amount <= fee {
+        return Err(Error::FeeError);
+    }
+    else {
+        amount -= fee;
+    }
+
+    Ok(Transaction {
         version: 2,
         lock_time: PackedLockTime(100),
-        input: vec![TxIn {
-            previous_output: outpoint,
-            script_sig: Script::new(),
-            sequence: Sequence(0x8030FFFF),
-            witness: Witness::default(),
-        }],
+        input: inputs,
         output: vec![
             TxOut {
                 value: amount,
                 script_pubkey: user_address.script_pubkey(),
             },
         ],
-    }
+    })
 }
 
 pub fn get_good_utxo_from_list(

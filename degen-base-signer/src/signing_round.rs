@@ -41,6 +41,7 @@ use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use bdk::miniscript::ToPublicKey;
+use itertools::Itertools;
 use tracing::{debug, info, warn};
 use url::Url;
 pub use wsts;
@@ -67,6 +68,7 @@ use crate::{
     state_machine::{Error as StateMachineError, StateMachine, States},
     util::{decrypt, encrypt, make_shared_secret},
 };
+use crate::signing_round::Error::UTXOAmount;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -84,6 +86,10 @@ pub enum Error {
     StateMachineError(#[from] StateMachineError),
     #[error("Error occured during signing: {0}")]
     SigningError(#[from] SighashError),
+    #[error("The amount you're sending is smaller than the fee")]
+    FeeError,
+    #[error("UTXO amount too low")]
+    UTXOAmount,
 }
 
 #[derive(thiserror::Error, Debug, Clone, Serialize, Deserialize)]
@@ -904,38 +910,61 @@ impl SigningRound {
 
         let (tap_info, script_address) = create_tree(&secp, aggregate_x_only, &script_1, &script_2);
 
-        let unspent_list_signer = self
-            .local_bitcoin_node
-            .list_unspent(&self.bitcoin_wallet.address())
-            .expect("Failed to get unspent list for signer.");
+        let amount_to_script: u64 = 2000;
+        let fee: u64 = 1000;
+        let transactions_to_script: u64 = 1;
 
-        let mut unspent_list_txout: Vec<TxOut> = vec![];
-        unspent_list_signer.iter().for_each(|utxo| {
-            unspent_list_txout.push(TxOut {
-                value: utxo.amount,
-                script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
+        for i in 1..=transactions_to_script {
+            let mut unspent_list_signer = self
+                .local_bitcoin_node
+                .list_unspent(&self.bitcoin_wallet.address())
+                .expect("Failed to get unspent list for signer.");
+
+            let mut valid_utxos = vec![];
+            let mut total_amount: u64 = 0;
+
+            unspent_list_signer.sort_by(|a, b| b.confirmations.partial_cmp(&a.confirmations).unwrap());
+            for utxo in unspent_list_signer.clone() {
+                if total_amount < amount_to_script {
+                    total_amount += utxo.amount;
+                    valid_utxos.push(utxo);
+                }
+            }
+
+            if total_amount < amount_to_script {
+                valid_utxos = vec![];
+                total_amount = 0;
+            }
+
+            if valid_utxos == vec![] {
+                return Err(UTXOAmount);
+            }
+
+            let mut unspent_list_txout: Vec<TxOut> = vec![];
+            valid_utxos.iter().for_each(|utxo| {
+                unspent_list_txout.push(TxOut {
+                    value: utxo.amount,
+                    script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
+                });
             });
-        });
 
-        let prevouts_signer = Prevouts::One(0, unspent_list_txout[0].clone());
+            let prevouts_signer = Prevouts::One(0, unspent_list_txout[0].clone());
 
-        let amount_to_script: u64 = 1000;
-        let fee: u64 = 300;
+            let (user_to_script_unsigned, amount_left) = create_tx_from_user_to_script(
+                &valid_utxos,
+                &self.bitcoin_wallet.address(),
+                &script_address,
+                amount_to_script,
+                fee,
+                0,
+            );
 
-        let (user_to_script_unsigned, amount_left) = create_tx_from_user_to_script(
-            &unspent_list_signer,
-            &self.bitcoin_wallet.address(),
-            &script_address,
-            amount_to_script,
-            fee,
-            0,
-        );
-
-        let user_to_script_signed =
-            sign_tx_user_to_script(&secp, &user_to_script_unsigned, &prevouts_signer, &keypair);
-        self.local_bitcoin_node
-            .broadcast_transaction(&user_to_script_signed)
-            .unwrap();
+            let user_to_script_signed =
+                sign_tx_user_to_script(&secp, &user_to_script_unsigned, &prevouts_signer, &keypair);
+            self.local_bitcoin_node
+                .broadcast_transaction(&user_to_script_signed)
+                .unwrap();
+        }
 
         sleep(Duration::from_secs(self.signer.signer_id as u64));
         self.local_bitcoin_node
@@ -946,6 +975,21 @@ impl SigningRound {
             .local_bitcoin_node
             .list_unspent(&script_address)
             .expect("No utxos.");
+
+        let refund_tx = create_refund_tx(&utxos, self.bitcoin_wallet.address(), fee).unwrap();
+
+        let mut txout_vec: Vec<TxOut> = vec![];
+        utxos.iter().for_each(|utxo| {
+            txout_vec.push(TxOut {
+                value: utxo.amount,
+                script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
+            });
+        });
+
+        let signed_tx = sign_tx_script_refund(&secp, &refund_tx, &txout_vec, &script_1, &keypair, &tap_info);
+
+        let signed_txid = self.local_bitcoin_node.broadcast_transaction(&signed_tx).unwrap();
+        info!("{signed_txid:#?}");
 
         let good_utxo = get_good_utxo_from_list(utxos, amount_to_script);
 
@@ -960,22 +1004,6 @@ impl SigningRound {
         msgs.push(response);
 
         Ok(msgs)
-
-        // TODO: THIS IS WORKING
-        // let outpoint = OutPoint::new(txid, 1);
-        //
-        // let refund_tx = create_refund_tx(outpoint, self.bitcoin_wallet.address(), amount_left, fee);
-        //
-        // let prevout = Prevouts::One(0, TxOut {value: amount_left, script_pubkey: script_address.script_pubkey()});
-        //
-        // let signed_tx = sign_tx_script_refund(&secp, &refund_tx, &prevout, &script_1, &keypair, &tap_info);
-        //
-        // let signed_txid = self.local_bitcoin_node.broadcast_transaction(&signed_tx).unwrap();
-        // info!("{signed_txid:#?}");
-
-        // let user_to_script_txid = self.local_bitcoin_node.broadcast_transaction(&user_to_script_unsigned);
-        //
-        // info!("{:#?}", user_to_script_txid);
 
         // let unspent_list = self.local_bitcoin_node.list_unspent(&script_address).unwrap();
         // info!("script_address: {script_address:#?}");
