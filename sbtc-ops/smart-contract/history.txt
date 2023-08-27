@@ -1,0 +1,15 @@
+#V2
+(contract-call .alex-go-swap swap-stx-to-xbtc 10 4)
+(contract-call? .alex-go-swap swap-stx-to-xbtc 10 4)
+(contract-call? .alex-go-swap swap-stx-to-xbtc u10 u4)
+(contract-call? .mining-pool-5-blocks update-threshold)
+(contract-call? .mining-pool-5-blocks get-k)
+(contract-call? .stacking-pool check-pool-SC-pox-2-allowance)
+:set_tx-sender ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+:set_tx_sender ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+:set-tx-sender ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+::help
+::set-tx-sender ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+::set_tx_sender ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+(contract-call? .stacking-pool check-pool-SC-pox-2-allowance)
+(contract-call? 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.stacking-pool check-pool-SC-pox-2-allowance)
