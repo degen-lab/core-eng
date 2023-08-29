@@ -1,4 +1,6 @@
 sbtc_contract = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-alpha"
+mining_contract = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mining-pool"
+exchange_contract = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.bridge-contract"
 stacks_private_key = "d655b2523bcd65e34889725c73064feb17ceb796831c0e111ba1a552b0f31b3901"
 bitcoin_private_key = "25c69df27df3f630daa05a344679474f383bf49e5c577354169f4858484abfe3"
 stacks_node_rpc_url = "http://localhost:20443"

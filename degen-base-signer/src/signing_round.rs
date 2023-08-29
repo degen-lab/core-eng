@@ -733,6 +733,7 @@ impl SigningRound {
     ) -> Result<Vec<MessageTypes>, Error> {
         let mut msgs = vec![];
 
+        // TODO: degens - verify output from tx from msgs to be the real 2 pox addresses
         let signer_ids = sign_request
             .nonce_responses
             .iter()

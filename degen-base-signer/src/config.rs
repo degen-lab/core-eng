@@ -89,6 +89,8 @@ pub enum Network {
 #[derive(Clone, Deserialize, Default, Debug)]
 struct RawConfig {
     pub sbtc_contract: String,
+    pub mining_contract: String,
+    pub exchange_contract: String,
     pub stacks_private_key: String,
     pub stacks_node_rpc_url: String,
     pub bitcoin_private_key: String,
@@ -185,21 +187,35 @@ impl RawConfig {
         }
     }
 
-    pub fn parse_contract(&self) -> Result<(ContractName, StacksAddress), Error> {
-        let mut split = self.sbtc_contract.split('.');
-        let contract_address = split
+    pub fn parse_contract(&self) -> Result<((ContractName, StacksAddress), (ContractName, StacksAddress)), Error> {
+        let mut split = self.mining_contract.split('.');
+        let mut split2 = self.exchange_contract.split('.');
+
+        let mining_address = split
             .next()
             .ok_or(Error::InvalidContract("Missing address".to_string()))?;
-        let contract_name = split
+        let mining_name = split
+            .next()
+            .ok_or(Error::InvalidContract("Missing name.".to_string()))?
+            .to_owned();
+        let exchange_address = split2
+            .next()
+            .ok_or(Error::InvalidContract("Missing address".to_string()))?;
+        let exchange_name = split2
             .next()
             .ok_or(Error::InvalidContract("Missing name.".to_string()))?
             .to_owned();
 
-        let contract_address = StacksAddress::from_string(contract_address)
+        let mining_address = StacksAddress::from_string(mining_address)
             .ok_or(Error::InvalidContract("Bad contract address.".to_string()))?;
-        let contract_name = ContractName::try_from(contract_name)
+        let mining_name = ContractName::try_from(mining_name)
             .map_err(|e| Error::InvalidContract(format!("Bad contract name: {}.", e)))?;
-        Ok((contract_name, contract_address))
+        let exchange_address = StacksAddress::from_string(exchange_address)
+            .ok_or(Error::InvalidContract("Bad contract address.".to_string()))?;
+        let exchange_name = ContractName::try_from(exchange_name)
+            .map_err(|e| Error::InvalidContract(format!("Bad contract name: {}.", e)))?;
+
+        Ok(((mining_name, mining_address), (exchange_name, exchange_address)))
     }
 }
 
@@ -299,7 +315,8 @@ impl TryFrom<&RawConfig> for Config {
         let (stacks_private_key, stacks_address) = raw_config.parse_stacks_private_key()?;
         let (bitcoin_private_key, bitcoin_xonly_public_key) = raw_config.parse_bitcoin_private_key()?;
         let (stacks_version, bitcoin_network) = raw_config.parse_version();
-        let (contract_name, contract_address) = raw_config.parse_contract().unwrap();
+        let ((mining_name, mining_address), (exchange_name, exchange_address)) = raw_config.parse_contract().unwrap();
+        // TODO: degens - use exchange contract as well
 
         let stacks_node_rpc_url = Url::parse(raw_config.stacks_node_rpc_url.as_str())
             .map_err(|e|
@@ -313,13 +330,13 @@ impl TryFrom<&RawConfig> for Config {
 
         let local_stacks_node = NodeClient::new(
             stacks_node_rpc_url.clone(),
-            contract_name.clone(),
-            contract_address,
+            mining_name.clone(),
+            mining_address,
         );
 
         let stacks_wallet = StacksWallet::new(
-            contract_name.clone(),
-            contract_address,
+            mining_name.clone(),
+            mining_address,
             stacks_private_key,
             stacks_address,
             stacks_version,
@@ -332,8 +349,8 @@ impl TryFrom<&RawConfig> for Config {
         local_bitcoin_node.load_wallet(bitcoin_wallet.address()).unwrap();
 
         Ok(Config::new(
-            contract_name,
-            contract_address,
+            mining_name,
+            mining_address,
             stacks_private_key,
             stacks_address,
             stacks_node_rpc_url,
