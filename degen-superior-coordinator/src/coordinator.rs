@@ -325,19 +325,20 @@ impl StacksCoordinator {
     }
 
     pub fn run_create_script(&mut self) -> Result<u64> {
-        let response_utxos = self.frost_coordinator.run_create_scripts_generation().unwrap();
+        let (response_utxos, response_stacks_addresses) = self.frost_coordinator.run_create_scripts_generation();
 
         let mut utxos= vec![];
+        let mut bad_actors = vec![];
+        let mut good_actors = vec![];
 
-        for utxo in response_utxos {
-            if utxo.clone().unwrap_or(UTXO::default()) == UTXO::default() {
+        for position in 0..response_utxos.len() {
+            if response_utxos[position].clone().unwrap_or(UTXO::default()) == UTXO::default() {
                 // TODO: Check here if someone hasn't sent their utxo
-
-                // function to warn stacks address
-                //
+                bad_actors.push(response_stacks_addresses[position]);
             }
             else {
-                utxos.push(utxo.clone().unwrap())
+                good_actors.push(response_stacks_addresses[position]);
+                utxos.push(response_utxos[position].clone().unwrap())
             }
         }
 

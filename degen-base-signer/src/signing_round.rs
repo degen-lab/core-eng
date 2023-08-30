@@ -408,6 +408,7 @@ impl Signable for DegensScriptRequest {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DegensScriptResponse {
     pub signer_id: u32,
+    pub stacks_address: StacksAddress,
     pub utxo: Result<UTXO, UtxoError>,
 }
 
@@ -415,6 +416,9 @@ impl Signable for DegensScriptResponse {
     fn hash(&self, hasher: &mut Sha256) {
         hasher.update("DEGENS_CREATE_SCRIPT_RESPONSE".as_bytes());
         hasher.update(self.signer_id.to_be_bytes());
+
+        hasher.update(self.stacks_address.bytes.as_bytes());
+        hasher.update(self.stacks_address.version.to_be_bytes());
 
         match &self.utxo {
             Ok(utxo) => {
@@ -998,6 +1002,7 @@ impl SigningRound {
 
         let response = DegensScriptResponse {
             signer_id: self.signer.signer_id,
+            stacks_address: self.stacks_address,
             utxo: good_utxo,
         };
 
