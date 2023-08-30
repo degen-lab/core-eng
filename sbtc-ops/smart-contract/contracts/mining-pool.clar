@@ -1004,16 +1004,25 @@ claimer: (get-block-info? miner-address block-number)})
 (var-get miners-list))
 
 (define-read-only (get-pending-accept-list) 
-(var-get pending-accept-list ))
+(var-get pending-accept-list))
 
 (define-read-only (get-proposed-removal-list) 
-(var-get proposed-removal-list ))
+(var-get proposed-removal-list))
 
 (define-read-only (get-notifier-vote-status) 
 (var-get notifier-vote-active))
 
 (define-read-only (get-notifier-vote-number (voted-notifier principal)) 
 (get votes-number (map-get? map-votes-notifier {voted-notifier: voted-notifier})))
+
+(define-read-only (get-warnings-user (user principal)) 
+(default-to u0 (get value (map-get? map-warnings {address: user}))))
+
+(define-read-only (is-blacklisted (miner principal)) 
+(default-to false (get value (map-get? map-blacklist {address: miner}))))
+
+(define-read-only (is-claimed (block uint)) 
+(default-to false (get claimed (map-get? claimed-rewards {block-number: block}))))
 
 (define-read-only (get-max-voted-notifier) 
 (var-get max-voted-proposed-notifier))

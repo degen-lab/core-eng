@@ -8,13 +8,14 @@ use blockstack_lib::{
     types::chainstate::StacksAddress,
     vm::{types::SequenceData, ClarityName, ContractName, Value as ClarityValue},
 };
+use blockstack_lib::vm::types::PrincipalData;
 use crate::config::{PublicKeys, SignerKeyIds};
 use reqwest::{
     blocking::{Client, Response},
     StatusCode,
 };
 use serde_json::{json, Value};
-use tracing::debug;
+use tracing::{debug, info};
 use url::Url;
 use wsts::ecdsa::PublicKey;
 
@@ -66,6 +67,15 @@ pub struct NodeClient {
     contract_name: ContractName,
     contract_address: StacksAddress,
     next_nonce: Option<u64>,
+}
+
+// status enum: "is-miner") || (ok "is-waiting") || (ok "is-pending") || (ok "is-none")))))
+// 'Miner' | 'NormalUser' | 'Pending' | 'Waiting' | 'Viewer';
+enum MinerStatus {
+    Miner,
+    Pending,
+    Waiting,
+    NormalUser,
 }
 
 impl NodeClient {
@@ -125,6 +135,228 @@ impl NodeClient {
             .map_err(|_| StacksNodeError::UnknownBlockHeight(block_height))?;
         Ok(serde_json::from_value(json[op].clone())?)
     }
+
+
+    fn get_status(&self, sender: &StacksAddress) -> Result<MinerStatus, StacksNodeError> {
+        let function_name = "get-address-status";
+        let data_hex = self.call_read(sender, function_name, &[&ClarityValue::Principal(PrincipalData::from(sender)).to_string()])?;
+        // response and string
+        // match string based on message
+        let data = ClarityValue::try_deserialize_hex_untyped(&data_hex)?;
+        if let ClarityValue::Response(optional_data) = data.clone() {
+            let display_value: &str = optional_data.data.expect_ascii().as_str();
+            info!("display value status {}", display_value);
+
+            // if let Ok(ClarityValue::Sequence(SequenceData::String(local_status))) = optional_data.data.expect_ascii() {
+            match display_value {
+                "is-miner" => Ok(MinerStatus::Miner),
+                "is-pending" => Ok(MinerStatus::Pending),
+                "is-waiting" => Ok(MinerStatus::Waiting),
+                "is-none" => Ok(MinerStatus::NormalUser),
+                _ =>  Err(StacksNodeError::MalformedClarityValue(
+                    function_name.to_string(),
+                    data,
+                ))
+            }
+            // if let Some(ClarityValue::Tuple(tuple_data)) = optional_data.data.map(|boxed| *boxed) {
+            } else {
+                Err(StacksNodeError::MalformedClarityValue(
+                    function_name.to_string(),
+                    data,
+                ))
+        }
+    }
+
+    fn get_warn_number_user(
+        &self,
+        sender: &StacksAddress,
+        warned_address: PrincipalData
+    ) -> Result<u128, StacksNodeError> {
+        let function_name = "get-warnings-user";
+        //TODO: degens - check for principal to be called here
+        let total_warnings_hex = self.call_read(sender, function_name, &[&ClarityValue::Principal(warned_address).to_string()])?;
+        let total_warnings =  ClarityValue::try_deserialize_hex_untyped(&total_warnings_hex)?;
+        if let ClarityValue::UInt(total_signers) = total_warnings {
+            Ok(total_signers)
+        } else {
+            Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                total_warnings,
+            ))
+        }
+    }
+
+    fn get_notifier(&self, sender: &StacksAddress) -> Result<PrincipalData, StacksNodeError> {
+        let function_name = "get-notifier";
+        let notifier_hex = self.call_read(sender, function_name, &[])?;
+        let notifier =  ClarityValue::try_deserialize_hex_untyped(&notifier_hex)?;
+        //TODO: degens - check for principal to be called here
+        if let ClarityValue::Principal(notifier) = notifier {
+            Ok(notifier)
+        } else {
+            Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                notifier,
+            ))
+        }
+    }
+
+    fn is_blacklisted(
+        &self,
+        sender: &StacksAddress,
+        address: PrincipalData
+    ) -> Result<bool, StacksNodeError> {
+        let function_name = "is-blacklisted";
+        // TODO: degens - check this
+        let is_blacklisted_hex = self.call_read(sender, function_name, &[&ClarityValue::Principal(address).to_string()])?;
+        let is_blacklisted =  ClarityValue::try_deserialize_hex_untyped(&is_blacklisted_hex)?;
+        if let ClarityValue::Bool(is_blacklisted) = is_blacklisted {
+            Ok(is_blacklisted)
+        } else {
+            Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                is_blacklisted,
+            ))
+        }
+    }
+
+    fn is_block_claimed(
+        &self,
+        sender: &StacksAddress,
+        block_height: u128
+    ) -> Result<bool, StacksNodeError> {
+        let function_name = "is-claimed";
+        // TODO: degens - check for uint
+        let is_claimed_hex = self.call_read(sender, function_name, &[&ClarityValue::UInt(block_height).to_string()])?;
+        let is_claimed =  ClarityValue::try_deserialize_hex_untyped(&is_claimed_hex)?;
+        if let ClarityValue::Bool(is_claimed) = is_claimed {
+            Ok(is_claimed)
+        } else {
+            Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                is_claimed,
+            ))
+        }
+    }
+
+    fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, StacksNodeError> {
+        let function_name = "get-auto-exchange";
+        let address = ClarityValue::Principal(PrincipalData::from(sender.clone()));
+        // TODO: degens - check this address
+        let is_auto_exchange_hex = self.call_read(sender, function_name, &[&address.to_string()])?;
+        let is_auto_exchange =  ClarityValue::try_deserialize_hex_untyped(&is_auto_exchange_hex)?;
+        if let ClarityValue::Bool(is_auto_exchange) = is_auto_exchange {
+            Ok(is_auto_exchange)
+        } else {
+            Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                is_auto_exchange,
+            ))
+        }
+    }
+
+    fn get_reward_info_for_block_height(
+        &self,
+        sender: &StacksAddress,
+        block_height: u128,
+    ) -> Result<(u128, PrincipalData), StacksNodeError> {
+        let mut final_reward: u128 = 0;
+        let mut final_claimer: PrincipalData = PrincipalData::try_from(sender)?;
+        // TODO: degens - this should not be the sender address in the end
+
+        // tuple style extract
+        // { reward: (get-block-info? block-reward block-number),
+        //   claimer: (get-block-info? miner-address block-number)} }
+
+        let function_name = "get-reward-at-block-read";
+        let reward_data_hex = self.call_read(
+            sender,
+            function_name,
+            &[&ClarityValue::UInt(block_height).to_string()],
+        )?;
+        let reward_data = ClarityValue::try_deserialize_hex_untyped(&reward_data_hex)?;
+        // we have directly a tuple for those values, should not have optional
+        // it can be a value or null
+
+        if let Some(ClarityValue::Tuple(tuple_data)) = reward_data.clone() {
+            // TODO: degens - ^^^ check if this is the format and remove the below comments
+            // if let ClarityValue::Optional(optional_data) = reward_data.clone() {
+            //     if let Some(ClarityValue::Tuple(tuple_data)) = optional_data.data.map(|boxed| *boxed) {
+                let reward =
+                    if let Some(ClarityValue::Sequence(SequenceData::Buffer(reward))) =
+                    tuple_data.data_map.get(&ClarityName::from("reward"))
+                    {
+                        if let ClarityValue::UInt(local_reward) = reward {
+                            final_reward = local_reward.clone();
+                        } else {
+                            return Err(StacksNodeError::MalformedClarityValue(
+                                function_name.to_string(),
+                                reward_data
+                            ))
+                        }
+                    };
+                    if let Some(ClarityValue::Sequence(SequenceData::Buffer(claimer))) =
+                        tuple_data.data_map.get(&ClarityName::from("claimer"))
+                    {
+                        if let ClarityValue::Principal(local_claimer) = reward {
+                            final_claimer = local_claimer.clone();
+                        }
+                        else {
+                            return Err(StacksNodeError::MalformedClarityValue(
+                                function_name.to_string(),
+                                reward_data
+                            ))
+                        }
+                    };
+                // }
+            } else {
+                return Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                reward_data
+                ))
+            }
+
+        // TODO: check if this is the case here
+        if StacksAddress::from(&final_claimer) == sender   {
+            return Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                reward_data
+            ))
+        }
+
+        Ok((final_reward, final_claimer))
+    }
+
+    fn get_miners_list(&self, sender: &StacksAddress) -> Result<Vec<StacksAddress>, StacksNodeError> {
+        let mut miners: Vec<PrincipalData> = Vec::new();
+        // input: no arguments
+        // output: list(Principal)
+        let mut miners:Vec<StacksAddress> = Vec::new();
+        let function_name = "get-miners-list";
+        let miners_data_hex = self.call_read(sender, function_name, &[])?;
+        let miners_data = ClarityValue::try_deserialize_hex_untyped(&miners_data_hex)?;
+        if let ClarityValue::Sequence(SequenceData::List(miners)) = miners_data.clone() {
+            for miner_clarity in &miners_data {
+                if let ClarityValue::Principal(miner_address) = miner_clarity {
+                    miners.push(StacksAddress::from(miner_address));
+                } else {
+                    return Err(StacksNodeError::MalformedClarityValue(
+                        function_name.to_string(),
+                        miners_data
+                    ));
+                }
+            }
+        } else {
+            return Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                miners_data,
+            ));
+        }
+        return Ok(miners);
+    }
+
+
+
 
     fn num_signers(&self, sender: &StacksAddress) -> Result<u128, StacksNodeError> {
         let function_name = "get-num-signers";
