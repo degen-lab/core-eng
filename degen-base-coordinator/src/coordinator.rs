@@ -147,7 +147,7 @@ where
             }
             Command::CreateScripts => {
                 info!("create scripts and fund them by signers");
-                self.run_create_scripts_generation()?;
+                self.run_create_scripts_generation();
                 Ok(())
             }
             Command::SpendScripts => {
@@ -187,7 +187,7 @@ where
         let (mut utxo, mut stacks_address) = (vec![], vec![]);
 
         while !ids_to_await.is_empty() {
-            if let MessageTypes::DegensCreateScriptsResponse(response) = self.wait_for_next_message()?.msg {
+            if let MessageTypes::DegensCreateScriptsResponse(response) = self.wait_for_next_message().unwrap().msg {
                 ids_to_await.remove(&response.signer_id);
                 utxo.push(response.utxo);
                 stacks_address.push(response.stacks_address);

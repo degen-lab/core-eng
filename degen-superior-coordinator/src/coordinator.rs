@@ -327,19 +327,32 @@ impl StacksCoordinator {
     pub fn run_create_script(&mut self) -> Result<u64> {
         let (response_utxos, response_stacks_addresses) = self.frost_coordinator.run_create_scripts_generation();
 
+        // check if signers sent correct details to coordinator
         let mut utxos= vec![];
         let mut bad_actors = vec![];
         let mut good_actors = vec![];
 
+        let mut all_miners: Vec<StacksAddress> = vec![];
+
         for position in 0..response_utxos.len() {
             if response_utxos[position].clone().unwrap_or(UTXO::default()) == UTXO::default() {
-                // TODO: Check here if someone hasn't sent their utxo
                 bad_actors.push(response_stacks_addresses[position]);
             }
             else {
                 good_actors.push(response_stacks_addresses[position]);
                 utxos.push(response_utxos[position].clone().unwrap())
             }
+        }
+
+        for position in 0..bad_actors.len() {
+            if good_actors.contains(&bad_actors[position]) {
+                bad_actors.remove(position);
+                all_miners.retain(|actor| actor != &bad_actors[position]);
+            }
+        }
+
+        for good_actor in good_actors {
+            all_miners.retain(|actor| actor != &good_actor);
         }
 
         let tx = create_tx_from_txids(
