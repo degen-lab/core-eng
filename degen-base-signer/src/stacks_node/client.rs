@@ -8,7 +8,7 @@ use blockstack_lib::{
     types::chainstate::StacksAddress,
     vm::{types::SequenceData, ClarityName, ContractName, Value as ClarityValue},
 };
-use blockstack_lib::vm::types::PrincipalData;
+use blockstack_lib::vm::types::{PrincipalData, StandardPrincipalData};
 use crate::config::{PublicKeys, SignerKeyIds};
 use reqwest::{
     blocking::{Client, Response},
@@ -139,31 +139,35 @@ impl NodeClient {
 
     fn get_status(&self, sender: &StacksAddress) -> Result<MinerStatus, StacksNodeError> {
         let function_name = "get-address-status";
-        let data_hex = self.call_read(sender, function_name, &[&ClarityValue::Principal(PrincipalData::from(sender)).to_string()])?;
+        let data_hex = self.call_read(sender, function_name, &[&ClarityValue::Principal(PrincipalData::from(*sender)).to_string()])?;
         // response and string
         // match string based on message
         let data = ClarityValue::try_deserialize_hex_untyped(&data_hex)?;
         if let ClarityValue::Response(optional_data) = data.clone() {
-            let display_value: &str = optional_data.data.expect_ascii().as_str();
+            let display_value: String = optional_data.data.clone().expect_ascii();
             info!("display value status {}", display_value);
+            let status_miner = String::from("is-miner");
+            let status_pending = String::from("is-pending");
+            let status_waiting = String::from("is-waiting");
+            let status_none = String::from("is-none");
 
             // if let Ok(ClarityValue::Sequence(SequenceData::String(local_status))) = optional_data.data.expect_ascii() {
             match display_value {
-                "is-miner" => Ok(MinerStatus::Miner),
-                "is-pending" => Ok(MinerStatus::Pending),
-                "is-waiting" => Ok(MinerStatus::Waiting),
-                "is-none" => Ok(MinerStatus::NormalUser),
+                status_miner => Ok(MinerStatus::Miner),
+                // TODO: check why is it unreachable
+                status_pending => Ok(MinerStatus::Pending),
+                status_waiting =>  Ok(MinerStatus::Waiting),
+                status_none => Ok(MinerStatus::NormalUser),
                 _ =>  Err(StacksNodeError::MalformedClarityValue(
                     function_name.to_string(),
                     data,
                 ))
             }
-            // if let Some(ClarityValue::Tuple(tuple_data)) = optional_data.data.map(|boxed| *boxed) {
-            } else {
-                Err(StacksNodeError::MalformedClarityValue(
-                    function_name.to_string(),
-                    data,
-                ))
+        } else {
+            Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                data,
+            ))
         }
     }
 
@@ -259,7 +263,7 @@ impl NodeClient {
 
     fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, StacksNodeError> {
         let function_name = "get-auto-exchange";
-        let address = ClarityValue::Principal(PrincipalData::from(sender.clone()));
+        let address = ClarityValue::Principal(PrincipalData::from(*sender));
         // TODO: degens - check this address
         let is_auto_exchange_hex = self.call_read(sender, function_name, &[&address.to_string()])?;
         let is_auto_exchange =  ClarityValue::try_deserialize_hex_untyped(&is_auto_exchange_hex)?;
@@ -279,7 +283,7 @@ impl NodeClient {
         block_height: u128,
     ) -> Result<(u128, PrincipalData), StacksNodeError> {
         let mut final_reward: u128 = 0;
-        let mut final_claimer: PrincipalData = PrincipalData::try_from(sender)?;
+        let mut final_claimer: PrincipalData = PrincipalData::from(*sender);
         // TODO: degens - this should not be the sender address in the end
 
         // tuple style extract
@@ -296,50 +300,42 @@ impl NodeClient {
         // we have directly a tuple for those values, should not have optional
         // it can be a value or null
 
-        if let Some(ClarityValue::Tuple(tuple_data)) = reward_data.clone() {
+        if let ClarityValue::Tuple(tuple_data) = reward_data.clone() {
             // TODO: degens - ^^^ check if this is the format and remove the below comments
             // if let ClarityValue::Optional(optional_data) = reward_data.clone() {
             //     if let Some(ClarityValue::Tuple(tuple_data)) = optional_data.data.map(|boxed| *boxed) {
-                let reward =
-                    if let Some(ClarityValue::Sequence(SequenceData::Buffer(reward))) =
-                    tuple_data.data_map.get(&ClarityName::from("reward"))
-                    {
-                        if let ClarityValue::UInt(local_reward) = reward {
-                            final_reward = local_reward.clone();
-                        } else {
-                            return Err(StacksNodeError::MalformedClarityValue(
-                                function_name.to_string(),
-                                reward_data
-                            ))
-                        }
-                    };
-                    if let Some(ClarityValue::Sequence(SequenceData::Buffer(claimer))) =
-                        tuple_data.data_map.get(&ClarityName::from("claimer"))
-                    {
-                        if let ClarityValue::Principal(local_claimer) = reward {
-                            final_claimer = local_claimer.clone();
-                        }
-                        else {
-                            return Err(StacksNodeError::MalformedClarityValue(
-                                function_name.to_string(),
-                                reward_data
-                            ))
-                        }
-                    };
-                // }
+            if let Some(ClarityValue::UInt(local_reward)) = tuple_data.data_map.get(&ClarityName::from("reward")) {
+                final_reward = local_reward.clone();
             } else {
                 return Err(StacksNodeError::MalformedClarityValue(
-                function_name.to_string(),
-                reward_data
-                ))
+                    function_name.to_string(),
+                    reward_data
+                ));
             }
 
+            if let Some(ClarityValue::Principal(local_claimer)) =
+                    tuple_data.data_map.get(&ClarityName::from("claimer"))
+            {
+                final_claimer = local_claimer.clone();
+            } else {
+                return Err(StacksNodeError::MalformedClarityValue(
+                    function_name.to_string(),
+                    reward_data
+                ));
+            }
+        } else {
+            return Err(StacksNodeError::MalformedClarityValue(
+            function_name.to_string(),
+            reward_data
+            ));
+        }
         // TODO: check if this is the case here
-        if StacksAddress::from(&final_claimer) == sender   {
+
+        if StacksAddress::from(final_claimer.clone()) == *sender   {
             return Err(StacksNodeError::MalformedClarityValue(
                 function_name.to_string(),
                 reward_data
-            ))
+            ));
         }
 
         Ok((final_reward, final_claimer))
@@ -353,8 +349,8 @@ impl NodeClient {
         let function_name = "get-miners-list";
         let miners_data_hex = self.call_read(sender, function_name, &[])?;
         let miners_data = ClarityValue::try_deserialize_hex_untyped(&miners_data_hex)?;
-        if let ClarityValue::Sequence(SequenceData::List(miners)) = miners_data.clone() {
-            for miner_clarity in &miners_data {
+        if let ClarityValue::Sequence(SequenceData::List(miners_clarity)) = miners_data.clone() {
+            for miner_clarity in miners_clarity.data {
                 if let ClarityValue::Principal(miner_address) = miner_clarity {
                     miners.push(StacksAddress::from(miner_address));
                 } else {

@@ -226,7 +226,7 @@ impl StacksWallet {
         let version = Value::Sequence(SequenceData::Buffer(BuffData {
             data: vec![00]
         })) ;
-        let btc_address = Value::Tuple(TupleData::try_from((hashbytes, version))?);
+        let btc_address = Value::none();// TODO: degens - Value::Tuple(TupleData::try_from((hashbytes, version))?);
         let function_args = vec![btc_address];
         let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
         Ok(tx)
