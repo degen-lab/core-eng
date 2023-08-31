@@ -239,6 +239,24 @@ impl NodeClient {
         }
     }
 
+    fn is_enough_voted_to_enter(
+        &self,
+        sender: &StacksAddress,
+    ) -> Result<bool, StacksNodeError> {
+        let function_name = "is-user-accepted";
+        // TODO: degens - check for uint
+        let data_hex = self.call_read(sender, function_name, &[])?;
+        let data =  ClarityValue::try_deserialize_hex_untyped(&data_hex)?;
+        if let ClarityValue::Bool(is_enough) = data {
+            Ok(is_enough)
+        } else {
+            Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                data,
+            ))
+        }
+    }
+
     fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, StacksNodeError> {
         let function_name = "get-auto-exchange";
         let address = ClarityValue::Principal(PrincipalData::from(sender.clone()));

@@ -18,6 +18,7 @@ use blockstack_lib::{
         ClarityName, ContractName, Value,
     },
 };
+use blockstack_lib::vm::types::PrincipalData;
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum Error {
@@ -140,6 +141,95 @@ impl StacksWallet {
             function_args,
         };
         Ok(payload.into())
+    }
+
+    /// COORDINATOR' FUNCTIONS
+    // TODO: degens - add the functions directly here or add them same way as peg-out/in for operation operability
+    pub fn propose_removal(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        // only coordinator can call this
+        let function_name = "propose-removal";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        // stacks wallet is self
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    pub fn warn_miner(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        // only coordinator can call this
+        let function_name = "warn-miner";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    /// MINERS' FUNCTIONS
+    pub fn vote_positive_join_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        let function_name = "vote-positive-join-request";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    // TODO: degens - find if needed or delete
+    pub fn vote_negative_join_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        let function_name = "vote-negative-join-request";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    pub fn vote_positive_remove_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        let function_name = "vote-positive-join-request";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    pub fn vote_negative_remove_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        let function_name = "vote-remove-join-request";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    /// PENDING MINERS' FUNCTIONS
+    pub fn add_pending_miners_to_pool(&self, nonce: u64) -> Result<StacksTransaction, Error> {
+        let function_name = "add-pending-miners-to-pool";
+        let function_args: Vec<Value> = vec![];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    /// WAITING MINERS' FUNCTIONS
+    pub fn call_try_enter(&self, nonce: u64) -> Result<StacksTransaction, Error> {
+        let function_name = "try-enter-pool";
+        let function_args: Vec<Value> = vec![];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    /// NORMAL USERS' FUNCTIONS
+    /// TODO: degens - check if works: hashbytes parsed and version hardcoded
+    /// (ask-to-join (my-btc-address {hashbytes: (buff 20), version: (buff 1)}))
+    pub fn ask_to_join(&self, nonce: u64, hashbytes_btc: Vec<u8>) -> Result<StacksTransaction, Error> {
+        let function_name = "ask-to-join";
+        // directly legacy address for the bitcoin private key provided
+        let hashbytes = Value::Sequence(SequenceData::Buffer(BuffData {
+            data: hashbytes_btc
+        })) ;
+        let version = Value::Sequence(SequenceData::Buffer(BuffData {
+            data: vec![00]
+        })) ;
+        let btc_address = Value::Tuple(TupleData::try_from((hashbytes, version))?);
+        let function_args = vec![btc_address];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
     }
 }
 

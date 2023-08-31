@@ -1033,6 +1033,11 @@ claimer: (get-block-info? miner-address block-number)})
 (define-read-only (get-current-block)
 (ok block-height))
 
+(define-read-only (is-user-accepted) 
+(is-vote-accepted 
+  (default-to 0 (get value (map-get? map-votes-accept-join {address: tx-sender}))) 
+  (unwrap-panic (get-k-at-block-asked-to-join tx-sender)))
+
 (define-private (is-principal-in-waiting-list (miner principal))
 (not (is-eq 
   (var-get waiting-list-miner-to-remove)
