@@ -481,6 +481,8 @@ fn create_frost_coordinator_from_contract(
     )
     .map_err(|_| Error::ConfigError("Invalid network_private_key.".to_string()))?;
     let http_relay_url = config.http_relay_url.clone().unwrap_or(String::new());
+    let miner_status = stacks_node.get_status(&config.stacks_address).unwrap();
+
     create_coordinator(&SignerConfig::new(
         config.contract_name.clone(),
         config.contract_address.clone(),
@@ -503,6 +505,7 @@ fn create_frost_coordinator_from_contract(
         signer_key_ids,
         network_private_key,
         http_relay_url,
+        miner_status,
     ))
     .map_err(|e| Error::ConfigError(e.to_string()))
 }

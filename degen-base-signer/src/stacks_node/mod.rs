@@ -7,7 +7,10 @@ use blockstack_lib::{
     types::chainstate::StacksAddress,
     vm::{types::serialization::SerializationError, Value as ClarityValue},
 };
-use crate::config::{PublicKeys, SignerKeyIds};
+use blockstack_lib::vm::types::{PrincipalData, SequenceData};
+use blockstack_lib::vm::{ClarityName, Value};
+use tracing::info;
+use crate::config::{MinerStatus, PublicKeys, SignerKeyIds};
 use wsts::ecdsa::PublicKey;
 
 use self::client::BroadcastError;
@@ -60,10 +63,16 @@ pub trait StacksNode {
     fn public_keys(&self, sender: &StacksAddress) -> Result<PublicKeys, Error>;
     fn signer_key_ids(&self, sender: &StacksAddress) -> Result<SignerKeyIds, Error>;
     fn coordinator_public_key(&self, sender: &StacksAddress) -> Result<Option<PublicKey>, Error>;
-    fn bitcoin_wallet_public_key(
-        &self,
-        sender: &StacksAddress,
-    ) -> Result<Option<XOnlyPublicKey>, Error>;
+    fn bitcoin_wallet_public_key(&self, sender: &StacksAddress) -> Result<Option<XOnlyPublicKey>, Error>;
+    fn get_status(&self, sender: &StacksAddress) -> Result<MinerStatus, Error>;
+    fn get_warn_number_user(&self, sender: &StacksAddress, warned_address: PrincipalData) -> Result<u128, Error>;
+    fn get_notifier(&self, sender: &StacksAddress) -> Result<PrincipalData, Error>;
+    fn is_blacklisted(&self, sender: &StacksAddress, address: PrincipalData) -> Result<bool, Error>;
+    fn is_block_claimed(&self, sender: &StacksAddress, block_height: u128) -> Result<bool, Error>;
+    fn is_enough_voted_to_enter(&self, sender: &StacksAddress) -> Result<bool, Error>;
+    fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, Error>;
+    fn get_reward_info_for_block_height(&self, sender: &StacksAddress, block_height: u128) -> Result<(u128, PrincipalData), Error>;
+    fn get_miners_list(&self, sender: &StacksAddress) -> Result<Vec<StacksAddress>, Error>;
 }
 
 pub type PegInOp = burn_ops::PegInOp;

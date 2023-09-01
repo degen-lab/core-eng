@@ -15,12 +15,15 @@ use blockstack_lib::burnchains::Address;
 use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
 use blockstack_lib::types::chainstate::{StacksAddress, StacksPublicKey};
 use blockstack_lib::vm::ContractName;
+use blockstack_lib::vm::types::PrincipalData;
 use toml;
+use tracing::info;
 use url::Url;
 use crate::bitcoin_node::{BitcoinNode, LocalhostBitcoinNode};
 use crate::bitcoin_wallet::BitcoinWallet;
 use crate::peg_wallet::BitcoinWallet as BitcoinWalletTrait;
 use crate::stacks_node::client::NodeClient;
+use crate::stacks_node::StacksNode;
 use crate::stacks_wallet::StacksWallet;
 
 // import type Bitcoin PrivateKey
@@ -49,6 +52,17 @@ pub enum Error {
     InvalidConfigUrl(String),
     #[error("Invalid contract. {0}")]
     InvalidContract(String),
+}
+
+
+// status enum: "is-miner") || (ok "is-waiting") || (ok "is-pending") || (ok "is-none")))))
+// 'Miner' | 'Pending' | 'Waiting' | 'NormalUser';
+#[derive(Clone, Debug)]
+pub enum MinerStatus {
+    Miner,
+    Pending,
+    Waiting,
+    NormalUser,
 }
 
 #[derive(Parser)]
@@ -250,6 +264,8 @@ pub struct Config {
     pub coordinator_public_key: ecdsa::PublicKey,
     pub total_signers: u32,
     pub total_keys: u32,
+    pub status: MinerStatus,
+
 }
 
 impl Config {
@@ -275,6 +291,7 @@ impl Config {
         signer_key_ids: SignerKeyIds,
         network_private_key: Scalar,
         http_relay_url: String,
+        status: MinerStatus,
     ) -> Config {
         Self {
             contract_name,
@@ -300,6 +317,7 @@ impl Config {
             total_keys: public_keys.key_ids.len().try_into().unwrap(),
             public_keys,
             signer_key_ids,
+            status,
         }
     }
 
@@ -348,6 +366,11 @@ impl TryFrom<&RawConfig> for Config {
         let local_bitcoin_node = LocalhostBitcoinNode::new(bitcoin_node_rpc_url.clone());
         local_bitcoin_node.load_wallet(bitcoin_wallet.address()).unwrap();
 
+        // TODO: junior read-only status
+        // info!("{:?}", local_stacks_node.get_miners_list(&stacks_address).unwrap()[0].to_string());
+        let miner_status = local_stacks_node.get_status(&stacks_address).unwrap();
+
+
         Ok(Config::new(
             mining_name,
             mining_address,
@@ -370,6 +393,7 @@ impl TryFrom<&RawConfig> for Config {
             raw_config.signer_key_ids(),
             raw_config.network_private_key()?,
             raw_config.http_relay_url.clone(),
+             miner_status
         ))
     }
 }
