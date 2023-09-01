@@ -404,10 +404,10 @@ mod tests {
             &vec![pk],
         )
         .expect("Failed to create stacks address");
-        let contract_name = ContractName::from("sbtc-alpha");
+        let contract_name = ContractName::from("mining-contract");
 
         let contract_address =
-            StacksAddress::from_string("SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE")
+            StacksAddress::from_string("ST1SCEXE6PMGPAC6B4N5P2MDKX8V4GF9QDEBN8YF5")
                 .expect("Failed to parse contract address");
         StacksWallet::new(
             contract_name,
@@ -418,6 +418,7 @@ mod tests {
             10,
         )
     }
+    // TODO: degens - test accordingly
 
     #[test]
     fn build_mint_transaction_test() {

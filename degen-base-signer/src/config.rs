@@ -102,7 +102,6 @@ pub enum Network {
 
 #[derive(Clone, Deserialize, Default, Debug)]
 struct RawConfig {
-    pub sbtc_contract: String,
     pub mining_contract: String,
     pub exchange_contract: String,
     pub stacks_private_key: String,

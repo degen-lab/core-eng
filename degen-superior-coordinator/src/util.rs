@@ -25,6 +25,7 @@ pub mod test {
     };
     use rand::Rng;
 
+    // TODO: degens - modify accordingly
     pub const PRIVATE_KEY_HEX: &str =
         "b244296d5907de9864c0b0d51f98a13c52890be0404e83f273144cd5b9960eed01";
     pub const PUBLIC_KEY_HEX: &str =

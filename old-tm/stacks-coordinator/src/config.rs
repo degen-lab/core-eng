@@ -21,7 +21,7 @@ pub enum Error {
     TomlError(#[from] toml::de::Error),
     #[error("Invalid config file. {0}")]
     InvalidConfig(String),
-    #[error("Invalid sbtc_contract. {0}")]
+    #[error("Invalid mining_contract. {0}")]
     InvalidContract(String),
     #[error("Failed to parse stacks_private_key: {0}")]
     InvalidPrivateKey(String),
