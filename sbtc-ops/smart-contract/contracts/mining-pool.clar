@@ -490,6 +490,20 @@
         (unwrap-panic block-asked-to-join))) 
           (ok (var-get k))))))
 
+(define-private (get-block-number-asked-to-join (miner-to-vote principal))
+(let ((block-asked-to-join (get value (map-get? map-block-asked-to-join {address: miner-to-vote}))))
+  (if (not (is-some block-asked-to-join)) u0
+  (if
+    (is-eq
+      (unwrap-panic block-asked-to-join)
+      block-height)
+    (var-get k)
+    (at-block
+    (unwrap-panic
+      (get-block-info? id-header-hash
+        (unwrap-panic block-asked-to-join)))
+          (var-get k))))))
+
 (define-private (get-n-at-block-asked-to-join (miner-to-vote principal)) 
 (let ((block-asked-to-join (get value (map-get? map-block-asked-to-join {address: miner-to-vote}))))
   (asserts! (is-some block-asked-to-join) err-not-asked-to-join)
@@ -806,7 +820,7 @@
 
 (define-private (is-vote-accepted (votes-number uint) (k-local uint))
 (if 
-  (is-eq k-local u0) ;; k is 0 for n=1, n=2 
+  (is-eq k-local u0) ;; k is 0 for n=1, n=2
     (>= votes-number u1) 
     (>= votes-number k-local)))
 
@@ -1034,9 +1048,9 @@ claimer: (get-block-info? miner-address block-number)})
 (ok block-height))
 
 (define-read-only (is-user-accepted) 
-(is-vote-accepted 
+(is-vote-accepted
   (default-to u0 (get value (map-get? map-votes-accept-join {address: tx-sender}))) 
-  (unwrap-panic (get-k-at-block-asked-to-join tx-sender))))
+  (get-block-number-asked-to-join tx-sender)))
 
 (define-private (is-principal-in-waiting-list (miner principal))
 (not (is-eq 

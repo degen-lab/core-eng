@@ -65,9 +65,9 @@ pub trait StacksNode {
     fn coordinator_public_key(&self, sender: &StacksAddress) -> Result<Option<PublicKey>, Error>;
     fn bitcoin_wallet_public_key(&self, sender: &StacksAddress) -> Result<Option<XOnlyPublicKey>, Error>;
     fn get_status(&self, sender: &StacksAddress) -> Result<MinerStatus, Error>;
-    fn get_warn_number_user(&self, sender: &StacksAddress, warned_address: PrincipalData) -> Result<u128, Error>;
+    fn get_warn_number_user(&self, sender: &StacksAddress, warned_address: &StacksAddress) -> Result<u128, Error>;
     fn get_notifier(&self, sender: &StacksAddress) -> Result<PrincipalData, Error>;
-    fn is_blacklisted(&self, sender: &StacksAddress, address: PrincipalData) -> Result<bool, Error>;
+    fn is_blacklisted(&self, sender: &StacksAddress, address: &StacksAddress) -> Result<bool, Error>;
     fn is_block_claimed(&self, sender: &StacksAddress, block_height: u128) -> Result<bool, Error>;
     fn is_enough_voted_to_enter(&self, sender: &StacksAddress) -> Result<bool, Error>;
     fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, Error>;

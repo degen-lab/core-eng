@@ -57,7 +57,7 @@ pub enum Error {
 
 // status enum: "is-miner") || (ok "is-waiting") || (ok "is-pending") || (ok "is-none")))))
 // 'Miner' | 'Pending' | 'Waiting' | 'NormalUser';
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MinerStatus {
     Miner,
     Pending,
@@ -365,8 +365,6 @@ impl TryFrom<&RawConfig> for Config {
         let local_bitcoin_node = LocalhostBitcoinNode::new(bitcoin_node_rpc_url.clone());
         local_bitcoin_node.load_wallet(bitcoin_wallet.address()).unwrap();
 
-        // TODO: junior read-only status
-        // info!("{:?}", local_stacks_node.get_miners_list(&stacks_address).unwrap()[0].to_string());
         let miner_status = local_stacks_node.get_status(&stacks_address).unwrap();
 
 
@@ -392,7 +390,7 @@ impl TryFrom<&RawConfig> for Config {
             raw_config.signer_key_ids(),
             raw_config.network_private_key()?,
             raw_config.http_relay_url.clone(),
-             miner_status
+            miner_status
         ))
     }
 }

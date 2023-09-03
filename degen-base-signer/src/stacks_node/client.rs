@@ -220,8 +220,6 @@ impl NodeClient {
             self.contract_name.as_str()
         ))?;
 
-        info!("{:?}", self.client.post(url.clone()).header("content-type", "application/json").body(body.clone()).send()?.text()?);
-
         let response = self
             .client
             .post(url)
@@ -441,16 +439,13 @@ impl StacksNode for NodeClient {
 
         let data_hex = self.call_read(sender, function_name, &[("0x".to_owned() + &(hex::encode(ClarityValue::Principal(PrincipalData::from(*sender)).serialize_to_vec()))).as_str()])?;
         // response and string
-        info!("{:?}", function_name);
         // match string based on message
         let data = ClarityValue::try_deserialize_hex_untyped(&data_hex)?;
         if let ClarityValue::Response(optional_data) = data.clone() {
             let display_value: String = optional_data.data.clone().expect_ascii();
-            info!("display value status {}", display_value);
             // if let Ok(ClarityValue::Sequence(SequenceData::String(local_status))) = optional_data.data.expect_ascii() {
             match display_value.as_str() {
                 "is-miner" => Ok(MinerStatus::Miner),
-                // TODO: junior check why is it unreachable
                 "is-pending" => Ok(MinerStatus::Pending),
                 "is-waiting" =>  Ok(MinerStatus::Waiting),
                 "is-none" => Ok(MinerStatus::NormalUser),
@@ -470,12 +465,13 @@ impl StacksNode for NodeClient {
     fn get_warn_number_user(
         &self,
         sender: &StacksAddress,
-        warned_address: PrincipalData
+        warned_address: &StacksAddress,
     ) -> Result<u128, StacksNodeError> {
         let function_name = "get-warnings-user";
-        //TODO: degens - check for principal to be called here
-        let total_warnings_hex = self.call_read(sender, function_name, &[&ClarityValue::Principal(warned_address).to_string()])?;
+
+        let total_warnings_hex = self.call_read(sender, function_name, &[("0x".to_owned() + &(hex::encode(ClarityValue::Principal(PrincipalData::from(*warned_address)).serialize_to_vec()))).as_str()])?;
         let total_warnings =  ClarityValue::try_deserialize_hex_untyped(&total_warnings_hex)?;
+        info!("total {:?}", total_warnings);
         if let ClarityValue::UInt(total_signers) = total_warnings {
             Ok(total_signers)
         } else {
@@ -490,7 +486,7 @@ impl StacksNode for NodeClient {
         let function_name = "get-notifier";
         let notifier_hex = self.call_read(sender, function_name, &[])?;
         let notifier =  ClarityValue::try_deserialize_hex_untyped(&notifier_hex)?;
-        //TODO: degens - check for principal to be called here
+
         if let ClarityValue::Principal(notifier) = notifier {
             Ok(notifier)
         } else {
@@ -504,11 +500,11 @@ impl StacksNode for NodeClient {
     fn is_blacklisted(
         &self,
         sender: &StacksAddress,
-        address: PrincipalData
+        address: &StacksAddress
     ) -> Result<bool, StacksNodeError> {
         let function_name = "is-blacklisted";
-        // TODO: degens - check this
-        let is_blacklisted_hex = self.call_read(sender, function_name, &[&ClarityValue::Principal(address).to_string()])?;
+
+        let is_blacklisted_hex = self.call_read(sender, function_name, &[("0x".to_owned() + &(hex::encode(ClarityValue::Principal(PrincipalData::from(*address)).serialize_to_vec()))).as_str()])?;
         let is_blacklisted =  ClarityValue::try_deserialize_hex_untyped(&is_blacklisted_hex)?;
         if let ClarityValue::Bool(is_blacklisted) = is_blacklisted {
             Ok(is_blacklisted)
@@ -526,8 +522,8 @@ impl StacksNode for NodeClient {
         block_height: u128
     ) -> Result<bool, StacksNodeError> {
         let function_name = "is-claimed";
-        // TODO: degens - check for uint
-        let is_claimed_hex = self.call_read(sender, function_name, &[&ClarityValue::UInt(block_height).to_string()])?;
+
+        let is_claimed_hex = self.call_read(sender, function_name, &[("0x".to_owned() + &(hex::encode(ClarityValue::UInt(block_height).serialize_to_vec()))).as_str()])?;
         let is_claimed =  ClarityValue::try_deserialize_hex_untyped(&is_claimed_hex)?;
         if let ClarityValue::Bool(is_claimed) = is_claimed {
             Ok(is_claimed)
@@ -544,9 +540,10 @@ impl StacksNode for NodeClient {
         sender: &StacksAddress,
     ) -> Result<bool, StacksNodeError> {
         let function_name = "is-user-accepted";
-        // TODO: degens - check for uint
+
         let data_hex = self.call_read(sender, function_name, &[])?;
         let data =  ClarityValue::try_deserialize_hex_untyped(&data_hex)?;
+        info!("{:?}", &data);
         if let ClarityValue::Bool(is_enough) = data {
             Ok(is_enough)
         } else {
@@ -559,12 +556,14 @@ impl StacksNode for NodeClient {
 
     fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, StacksNodeError> {
         let function_name = "get-auto-exchange";
-        let address = ClarityValue::Principal(PrincipalData::from(*sender));
-        // TODO: degens - check this address
-        let is_auto_exchange_hex = self.call_read(sender, function_name, &[&address.to_string()])?;
+
+        let is_auto_exchange_hex = self.call_read(sender, function_name, &[("0x".to_owned() + &(hex::encode(ClarityValue::Principal(PrincipalData::from(*sender)).serialize_to_vec()))).as_str()])?;
         let is_auto_exchange =  ClarityValue::try_deserialize_hex_untyped(&is_auto_exchange_hex)?;
+
         if let ClarityValue::Bool(is_auto_exchange) = is_auto_exchange {
             Ok(is_auto_exchange)
+        } else if let ClarityValue::Optional(is_auto_exchange) = is_auto_exchange.clone() {
+            Ok(false)
         } else {
             Err(StacksNodeError::MalformedClarityValue(
                 function_name.to_string(),
@@ -582,26 +581,26 @@ impl StacksNode for NodeClient {
         let mut final_claimer: PrincipalData = PrincipalData::from(*sender);
         // TODO: degens - this should not be the sender address in the end
 
-        // tuple style extract
-        // { reward: (get-block-info? block-reward block-number),
-        //   claimer: (get-block-info? miner-address block-number)} }
-
         let function_name = "get-reward-at-block-read";
         let reward_data_hex = self.call_read(
             sender,
             function_name,
-            &[&ClarityValue::UInt(block_height).to_string()],
+            &[("0x".to_owned() + &(hex::encode(ClarityValue::UInt(block_height).serialize_to_vec()))).as_str()],
         )?;
         let reward_data = ClarityValue::try_deserialize_hex_untyped(&reward_data_hex)?;
         // we have directly a tuple for those values, should not have optional
         // it can be a value or null
 
         if let ClarityValue::Tuple(tuple_data) = reward_data.clone() {
-            // TODO: degens - ^^^ check if this is the format and remove the below comments
-            // if let ClarityValue::Optional(optional_data) = reward_data.clone() {
-            //     if let Some(ClarityValue::Tuple(tuple_data)) = optional_data.data.map(|boxed| *boxed) {
-            if let Some(ClarityValue::UInt(local_reward)) = tuple_data.data_map.get(&ClarityName::from("reward")) {
-                final_reward = local_reward.clone();
+            if let Some(ClarityValue::Optional(local_reward)) = tuple_data.data_map.get(&ClarityName::from("reward")) {
+                if let ClarityValue::UInt(reward) = &*local_reward.data.clone().unwrap_or(Box::new(ClarityValue::Bool(false))) {
+                    final_reward = reward.clone();
+                } else {
+                    return Err(StacksNodeError::MalformedClarityValue(
+                        function_name.to_string(),
+                        reward_data
+                    ));
+                }
             } else {
                 return Err(StacksNodeError::MalformedClarityValue(
                     function_name.to_string(),
@@ -609,10 +608,15 @@ impl StacksNode for NodeClient {
                 ));
             }
 
-            if let Some(ClarityValue::Principal(local_claimer)) =
-                tuple_data.data_map.get(&ClarityName::from("claimer"))
-            {
-                final_claimer = local_claimer.clone();
+            if let Some(ClarityValue::Optional(local_claimer)) = tuple_data.data_map.get(&ClarityName::from("claimer")) {
+                if let ClarityValue::Principal(claimer) = &*local_claimer.data.clone().unwrap_or(Box::new(ClarityValue::Bool(false))) {
+                    final_claimer = claimer.clone();
+                } else {
+                    return Err(StacksNodeError::MalformedClarityValue(
+                        function_name.to_string(),
+                        reward_data
+                    ));
+                }
             } else {
                 return Err(StacksNodeError::MalformedClarityValue(
                     function_name.to_string(),
@@ -626,13 +630,13 @@ impl StacksNode for NodeClient {
             ));
         }
         // TODO: check if this is the case here
-
-        if StacksAddress::from(final_claimer.clone()) == *sender   {
-            return Err(StacksNodeError::MalformedClarityValue(
-                function_name.to_string(),
-                reward_data
-            ));
-        }
+        // TODO: what if the sender actually is the one who claimed the block? this will return error for no reason
+        // if StacksAddress::from(final_claimer.clone()) == *sender   {
+        //     return Err(StacksNodeError::MalformedClarityValue(
+        //         function_name.to_string(),
+        //         reward_data
+        //     ));
+        // }
 
         Ok((final_reward, final_claimer))
     }
@@ -728,6 +732,167 @@ mod tests {
                 client,
             }
         }
+    }
+
+    #[test]
+    fn get_address_status() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.get_status(&address));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x070d0000000769732d6e6f6e65\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, MinerStatus::NormalUser);
+    }
+
+    #[test]
+    fn get_warn_number_user() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.get_warn_number_user(
+            &address,
+            &StacksAddress::from_string("ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM").unwrap()
+        ));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x0100000000000000000000000000000000\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn get_notifier() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.get_notifier(&address));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x051a6d78de7b0625dfbfc16c3a8a5735f6dc3dc3f2ce\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, PrincipalData::from(StacksAddress::from_string("ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM").unwrap()));
+    }
+
+    #[test]
+    fn is_blacklisted() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.is_blacklisted(
+            &address,
+            &StacksAddress::from_string("ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM").unwrap()
+        ));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x04\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn is_block_claimed() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.is_block_claimed(
+            &address,
+            10,
+        ));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x04\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn is_enough_voted_to_enter() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.is_enough_voted_to_enter(&address));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x04\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn is_auto_exchange() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.is_blacklisted(
+            &address,
+            &StacksAddress::from_string("ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM").unwrap()
+        ));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x04\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn get_reward_info_for_block_height() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.get_reward_info_for_block_height(
+            &address,
+            10,
+        ));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x0c0000000207636c61696d65720a051aee9369fb719c0ba43ddf4d94638a970b84775f47067265776172640a010000000000000000000000003b9f5de0\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, (1000300000, PrincipalData::from(StacksAddress::from_string("ST3Q96TFVE6E0Q91XVX6S8RWAJW5R8XTZ8YEBM8RQ").unwrap())));
+    }
+
+    #[test]
+    fn get_miners_list() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.get_miners_list(
+            &address,
+        ));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x0b00000001051a6d78de7b0625dfbfc16c3a8a5735f6dc3dc3f2ce\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, [StacksAddress::from_string("ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM").unwrap()]);
     }
 
     fn write_response(mock_server: TcpListener, bytes: &[u8]) -> [u8; 1024] {
@@ -902,44 +1067,6 @@ mod tests {
         let result = h.join().unwrap();
         assert!(matches!(result, Err(StacksNodeError::InvalidJsonEntry(_))));
     }
-
-    #[test]
-    fn get_notifier() {
-        let config = TestConfig::new();
-        let address = config.client.contract_address;
-
-        let h = spawn(move || config.client.get_notifier(&address));
-        println!("{:?}",  ClarityValue::Principal(PrincipalData::from(address)));
-
-        write_response(
-            config.mock_server,
-            // b"HTTP/1.1 200 OK\n\n{\"peer_version\":420759911,\"burn_block_height2\":2430220}",
-            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x0100000000000000000000000000000fa0\"}"
-        );
-        let result = h.join().unwrap().unwrap();
-        println!("{}", result);
-        // json::<serde_json::Value
-        // assert_eq!(result, PrincipalData::from(address));
-    }
-
-    #[test]
-    fn get_address_status() {
-        let config = TestConfig::new();
-        let address = config.client.contract_address;
-
-        let h = spawn(move || config.client.get_status(&address));
-        println!("{:?}",  ClarityValue::Principal(PrincipalData::from(address)));
-
-        write_response(
-            config.mock_server,
-            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x070d0000000769732d6e6f6e65\"}"
-        );
-        let result = h.join().unwrap().unwrap();
-        println!("{:?}", result);
-        // json::<serde_json::Value
-        // assert_eq!(result, PrincipalData::from(address));
-    }
-
 
     #[test]
     fn should_send_tx_bytes_to_node() {
