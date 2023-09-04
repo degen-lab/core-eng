@@ -359,6 +359,7 @@ fn operate_address_status_non_miner(
                 if not_in_mempool {
                     let tx = stacks_wallet.ask_to_join(nonce, bitcoin_pubkey.serialize().to_vec().clone()).unwrap();
                     info!("The tx for ask-to-join: {:#?}", tx);
+                    info!("{:?}", stacks_node.broadcast_transaction(&tx));
                 }
             }
             MinerStatus::Waiting => {

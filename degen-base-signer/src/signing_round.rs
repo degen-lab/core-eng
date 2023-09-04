@@ -951,7 +951,6 @@ impl SigningRound {
                     value: utxo.amount,
                     script_pubkey: Script::from_str(utxo.scriptPubKey.as_str()).unwrap(),
                 });
-                info!("address {:#?}\nscript pubkey {:#?}", utxo.address, utxo.scriptPubKey);
             });
 
             let prevouts_signer = Prevouts::One(0, unspent_list_txout[0].clone());
