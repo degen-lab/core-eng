@@ -554,6 +554,25 @@ impl StacksNode for NodeClient {
         }
     }
 
+    fn is_enough_blocks_passed_for_pending_miners(
+        &self,
+        sender: &StacksAddress,
+    ) -> Result<bool, StacksNodeError> {
+        let function_name = "blocks-passed-for-pending-miners";
+
+        let data_hex = self.call_read(sender, function_name, &[])?;
+        let data =  ClarityValue::try_deserialize_hex_untyped(&data_hex)?;
+        info!("{:?}", &data);
+        if let ClarityValue::Bool(is_enough) = data {
+            Ok(is_enough)
+        } else {
+            Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                data,
+            ))
+        }
+    }
+
     fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, StacksNodeError> {
         let function_name = "get-auto-exchange";
 
@@ -1087,7 +1106,7 @@ mod tests {
             anchor_mode: TransactionAnchorMode::Any,
             post_condition_mode: TransactionPostConditionMode::Allow,
             post_conditions: vec![],
-            payload: TransactionPayload::Coinbase(CoinbasePayload([0; 32]), None),
+            payload: TransactionPayload::Coinbase(x([0; 32]), None),
         };
 
         let mut tx_bytes = [0u8; 1024];

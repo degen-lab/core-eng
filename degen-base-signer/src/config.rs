@@ -5,7 +5,7 @@ use p256k1::{
     scalar::{Error as ScalarError, Scalar},
 };
 use serde::Deserialize;
-use std::fs;
+use std::{fs, thread};
 use std::str::FromStr;
 use bincode::config;
 use bitcoin::{KeyPair, XOnlyPublicKey};
@@ -16,6 +16,7 @@ use blockstack_lib::chainstate::stacks::{StacksPrivateKey, TransactionVersion};
 use blockstack_lib::types::chainstate::{StacksAddress, StacksPublicKey};
 use blockstack_lib::vm::ContractName;
 use blockstack_lib::vm::types::PrincipalData;
+use p256k1::field::P;
 use toml;
 use tracing::info;
 use url::Url;
@@ -326,6 +327,76 @@ impl Config {
     }
 }
 
+fn operate_address_status_non_miner(
+    parsed_status: &MinerStatus,
+    stacks_wallet: &StacksWallet,
+    stacks_node: &NodeClient,
+    stacks_address: &StacksAddress
+) -> Result<MinerStatus, Error> {
+
+    let mut current_status: MinerStatus = parsed_status.clone();
+    if current_status == MinerStatus::Miner {
+        info!("Already miner!");
+    }
+
+    /// hashbytes for the bitcoin p2pkh address
+    // types.tuple({
+    // version - link // https://github.com/stacksgov/sips/blob/feat/sip-015/sips/sip-015/sip-015-network-upgrade.md#new-method-get-burn-block-info
+    //     version: types.buff(hash160(buffer_from('00'))),
+    //     hashbytes: types.buff(hash160(buffer_from(publicKeyHex))),
+    // })
+    let bitcoin_address: Vec<u8> = vec![];
+    while current_status != MinerStatus::Miner {
+        // get nonce
+        current_status == stacks_node.get_status(stacks_address).unwrap();
+        let mut nonce: u64 = 12;
+        match current_status {
+            MinerStatus::NormalUser => {
+                // TODO: degens - query the mempool
+                let not_in_mempool = false;
+                // if not anywhere, make call ask to join
+                if not_in_mempool {
+                    let tx = stacks_wallet.ask_to_join(nonce, bitcoin_address.clone()).unwrap();
+                    info!("The tx for ask-to-join: {:#?}", tx);
+                }
+            }
+            MinerStatus::Waiting => {
+                // verify number of threshold met
+                let enough_voted = stacks_node.is_enough_voted_to_enter(stacks_address).unwrap();
+                if enough_voted {
+                    // also query mempool
+                    let not_in_mempool = false;
+                    // if not anywhere, make call try-enter
+                    if not_in_mempool {
+                        let tx = stacks_wallet.call_try_enter(nonce).unwrap();
+                        info!("The tx for try-enter: {:#?}", tx);
+                    }
+                }
+            }
+            MinerStatus::Pending => {
+                // verify enough blocks passed
+                let enough_blocks_passed = stacks_node.is_enough_blocks_passed_for_pending_miners(stacks_address).unwrap();
+                if enough_blocks_passed {
+                    // also query mempool ( if anyone called this function in the last n blocks )
+                    let not_in_mempool = false;
+                    // if not anywhere, make call try-enter
+                    if not_in_mempool {
+                        // if not anywhere, make call add-pending-miners-to-pool
+                        let tx = stacks_wallet.add_pending_miners_to_pool(nonce).unwrap();
+                        info!("The tx for add-pending-miners-to-pool: {:#?}", tx);
+                    }
+                }
+            }
+            MinerStatus::Miner => {
+                // do nothing
+            }
+        }
+    }
+
+    Ok(current_status)
+}
+
+
 impl TryFrom<&RawConfig> for Config {
     type Error = Error;
     fn try_from(raw_config: &RawConfig) -> Result<Self, Error> {
@@ -366,6 +437,13 @@ impl TryFrom<&RawConfig> for Config {
         local_bitcoin_node.load_wallet(bitcoin_wallet.address()).unwrap();
 
         let miner_status = local_stacks_node.get_status(&stacks_address).unwrap();
+
+
+        let status = operate_address_status_non_miner(&miner_status, &stacks_wallet, &local_stacks_node, &stacks_address).unwrap();
+        if (status != MinerStatus::Miner) {
+            // error
+
+        }
 
 
         Ok(Config::new(

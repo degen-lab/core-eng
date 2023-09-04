@@ -996,9 +996,6 @@ claimer: (get-block-info? miner-address block-number)})
 
 ;; READ-ONLY UTILS
 
-;; (define-read-only (check-vote-accepted) ;; to check the vote status inside FE
-;; (is-vote-accepted (unwrap-panic (get value (map-get? map-votes-accept-join {address: tx-sender})))))
-
 (define-read-only (get-k) 
 (var-get k))
 
@@ -1051,6 +1048,11 @@ claimer: (get-block-info? miner-address block-number)})
 (is-vote-accepted
   (default-to u0 (get value (map-get? map-votes-accept-join {address: tx-sender}))) 
   (get-block-number-asked-to-join tx-sender)))
+
+(define-read-only (blocks-passed-for-pending-miners)
+(if (>= (- block-height (var-get last-join-done)) blocks-to-pass)
+    true
+    false))
 
 (define-private (is-principal-in-waiting-list (miner principal))
 (not (is-eq 
