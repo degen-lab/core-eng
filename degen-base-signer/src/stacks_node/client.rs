@@ -471,7 +471,6 @@ impl StacksNode for NodeClient {
 
         let total_warnings_hex = self.call_read(sender, function_name, &[("0x".to_owned() + &(hex::encode(ClarityValue::Principal(PrincipalData::from(*warned_address)).serialize_to_vec()))).as_str()])?;
         let total_warnings =  ClarityValue::try_deserialize_hex_untyped(&total_warnings_hex)?;
-        info!("total {:?}", total_warnings);
         if let ClarityValue::UInt(total_signers) = total_warnings {
             Ok(total_signers)
         } else {
@@ -543,7 +542,6 @@ impl StacksNode for NodeClient {
 
         let data_hex = self.call_read(sender, function_name, &[])?;
         let data =  ClarityValue::try_deserialize_hex_untyped(&data_hex)?;
-        info!("{:?}", &data);
         if let ClarityValue::Bool(is_enough) = data {
             Ok(is_enough)
         } else {
@@ -562,7 +560,6 @@ impl StacksNode for NodeClient {
 
         let data_hex = self.call_read(sender, function_name, &[])?;
         let data =  ClarityValue::try_deserialize_hex_untyped(&data_hex)?;
-        info!("{:?}", &data);
         if let ClarityValue::Bool(is_enough) = data {
             Ok(is_enough)
         } else {

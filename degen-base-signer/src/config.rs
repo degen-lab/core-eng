@@ -347,14 +347,16 @@ fn operate_address_status_non_miner(
     //     hashbytes: types.buff(hash160(buffer_from(publicKeyHex))),
     // })
 
+    let mut stacks_node_clone = stacks_node.clone();
     // while current_status != MinerStatus::Miner {
         // get nonce
+        let nonce = stacks_node_clone.next_nonce(&stacks_address).unwrap();
         current_status == stacks_node.get_status(stacks_address).unwrap();
-        let mut nonce: u64 = 12;
+
         match current_status {
             MinerStatus::NormalUser => {
                 // TODO: degens - query the mempool
-                let not_in_mempool = true;
+                let not_in_mempool = false;
                 // if not anywhere, make call ask to join
                 if not_in_mempool {
                     let tx = stacks_wallet.ask_to_join(nonce, bitcoin_pubkey.serialize().to_vec().clone()).unwrap();
