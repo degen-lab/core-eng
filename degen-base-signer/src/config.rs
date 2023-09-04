@@ -331,7 +331,8 @@ fn operate_address_status_non_miner(
     parsed_status: &MinerStatus,
     stacks_wallet: &StacksWallet,
     stacks_node: &NodeClient,
-    stacks_address: &StacksAddress
+    stacks_address: &StacksAddress,
+    bitcoin_pubkey: &XOnlyPublicKey,
 ) -> Result<MinerStatus, Error> {
 
     let mut current_status: MinerStatus = parsed_status.clone();
@@ -339,24 +340,24 @@ fn operate_address_status_non_miner(
         info!("Already miner!");
     }
 
-    /// hashbytes for the bitcoin p2pkh address
+    // hashbytes for the bitcoin p2pkh address
     // types.tuple({
     // version - link // https://github.com/stacksgov/sips/blob/feat/sip-015/sips/sip-015/sip-015-network-upgrade.md#new-method-get-burn-block-info
     //     version: types.buff(hash160(buffer_from('00'))),
     //     hashbytes: types.buff(hash160(buffer_from(publicKeyHex))),
     // })
-    let bitcoin_address: Vec<u8> = vec![];
-    while current_status != MinerStatus::Miner {
+
+    // while current_status != MinerStatus::Miner {
         // get nonce
         current_status == stacks_node.get_status(stacks_address).unwrap();
         let mut nonce: u64 = 12;
         match current_status {
             MinerStatus::NormalUser => {
                 // TODO: degens - query the mempool
-                let not_in_mempool = false;
+                let not_in_mempool = true;
                 // if not anywhere, make call ask to join
                 if not_in_mempool {
-                    let tx = stacks_wallet.ask_to_join(nonce, bitcoin_address.clone()).unwrap();
+                    let tx = stacks_wallet.ask_to_join(nonce, bitcoin_pubkey.serialize().to_vec().clone()).unwrap();
                     info!("The tx for ask-to-join: {:#?}", tx);
                 }
             }
@@ -391,7 +392,7 @@ fn operate_address_status_non_miner(
                 // do nothing
             }
         }
-    }
+    // }
 
     Ok(current_status)
 }
@@ -439,10 +440,9 @@ impl TryFrom<&RawConfig> for Config {
         let miner_status = local_stacks_node.get_status(&stacks_address).unwrap();
 
 
-        let status = operate_address_status_non_miner(&miner_status, &stacks_wallet, &local_stacks_node, &stacks_address).unwrap();
+        let status = operate_address_status_non_miner(&miner_status, &stacks_wallet, &local_stacks_node, &stacks_address, &bitcoin_xonly_public_key).unwrap();
         if (status != MinerStatus::Miner) {
             // error
-
         }
 
 

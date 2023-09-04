@@ -70,6 +70,7 @@ pub trait StacksNode {
     fn is_blacklisted(&self, sender: &StacksAddress, address: &StacksAddress) -> Result<bool, Error>;
     fn is_block_claimed(&self, sender: &StacksAddress, block_height: u128) -> Result<bool, Error>;
     fn is_enough_voted_to_enter(&self, sender: &StacksAddress) -> Result<bool, Error>;
+    fn is_enough_blocks_passed_for_pending_miners(&self, sender: &StacksAddress) -> Result<bool, Error>;
     fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, Error>;
     fn get_reward_info_for_block_height(&self, sender: &StacksAddress, block_height: u128) -> Result<(u128, PrincipalData), Error>;
     fn get_miners_list(&self, sender: &StacksAddress) -> Result<Vec<StacksAddress>, Error>;

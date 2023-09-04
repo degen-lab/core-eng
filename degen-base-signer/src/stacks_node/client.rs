@@ -859,6 +859,22 @@ mod tests {
     }
 
     #[test]
+    fn is_enough_blocks_passed_for_pending_miners() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.is_enough_blocks_passed_for_pending_miners(&address));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x04\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+
+        assert_eq!(result, false);
+    }
+
+    #[test]
     fn is_auto_exchange() {
         let config = TestConfig::new();
         let address = config.client.contract_address;
@@ -1106,7 +1122,7 @@ mod tests {
             anchor_mode: TransactionAnchorMode::Any,
             post_condition_mode: TransactionPostConditionMode::Allow,
             post_conditions: vec![],
-            payload: TransactionPayload::Coinbase(x([0; 32]), None),
+            payload: TransactionPayload::Coinbase(CoinbasePayload([0; 32]), None),
         };
 
         let mut tx_bytes = [0u8; 1024];
