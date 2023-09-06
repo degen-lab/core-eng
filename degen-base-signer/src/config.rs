@@ -330,7 +330,7 @@ impl Config {
 fn operate_address_status_non_miner(
     parsed_status: &MinerStatus,
     stacks_wallet: &StacksWallet,
-    stacks_node: &NodeClient,
+    stacks_node: &mut NodeClient,
     stacks_address: &StacksAddress,
     bitcoin_pubkey: &XOnlyPublicKey,
 ) -> Result<MinerStatus, Error> {
@@ -347,15 +347,16 @@ fn operate_address_status_non_miner(
     //     hashbytes: types.buff(hash160(buffer_from(publicKeyHex))),
     // })
 
-    let mut stacks_node_clone = stacks_node.clone();
     // while current_status != MinerStatus::Miner {
         // get nonce
-        let nonce = stacks_node_clone.next_nonce(&stacks_address).unwrap();
+        let nonce = stacks_node.next_nonce(stacks_address).unwrap();
         current_status == stacks_node.get_status(stacks_address).unwrap();
+        //  info!("stx addr {:?}", stacks_address.to_string()); // ST2XK3JZ0RYKPS38N9HHMYVHGTSABPNF98RPCJDQS
 
         match current_status {
             MinerStatus::NormalUser => {
                 // TODO: degens - query the mempool
+
                 let not_in_mempool = false;
                 // if not anywhere, make call ask to join
                 if not_in_mempool {
@@ -374,6 +375,7 @@ fn operate_address_status_non_miner(
                     if not_in_mempool {
                         let tx = stacks_wallet.call_try_enter(nonce).unwrap();
                         info!("The tx for try-enter: {:#?}", tx);
+                        info!("{:?}", stacks_node.broadcast_transaction(&tx));
                     }
                 }
             }
@@ -388,6 +390,7 @@ fn operate_address_status_non_miner(
                         // if not anywhere, make call add-pending-miners-to-pool
                         let tx = stacks_wallet.add_pending_miners_to_pool(nonce).unwrap();
                         info!("The tx for add-pending-miners-to-pool: {:#?}", tx);
+                        info!("{:?}", stacks_node.broadcast_transaction(&tx));
                     }
                 }
             }
@@ -420,7 +423,7 @@ impl TryFrom<&RawConfig> for Config {
                 Error::InvalidConfigUrl(format!("Invalid bitcoin_node_rpc_url: {}", e))
             )?;
 
-        let local_stacks_node = NodeClient::new(
+        let mut local_stacks_node = NodeClient::new(
             stacks_node_rpc_url.clone(),
             mining_name.clone(),
             mining_address,
@@ -443,7 +446,7 @@ impl TryFrom<&RawConfig> for Config {
         let miner_status = local_stacks_node.get_status(&stacks_address).unwrap();
 
 
-        let status = operate_address_status_non_miner(&miner_status, &stacks_wallet, &local_stacks_node, &stacks_address, &bitcoin_xonly_public_key).unwrap();
+        let status = operate_address_status_non_miner(&miner_status, &stacks_wallet, &mut local_stacks_node, &stacks_address, &bitcoin_xonly_public_key).unwrap();
         if (status != MinerStatus::Miner) {
             // error
         }

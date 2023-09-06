@@ -315,12 +315,12 @@ impl StacksNode for NodeClient {
             .body(buffer)
             .send()?;
 
-        println!("response : {}", response.status());
         // TODO degens: fix broadcast stx transaction
-        // if response.status() != StatusCode::OK {
-        //     let json_response = response.json::<serde_json::Value>()?;
-        //     return Err(StacksNodeError::from(BroadcastError::from(&json_response)));
-        // }
+        if response.status() != StatusCode::OK {
+            let json_response = response.json::<serde_json::Value>()?;
+            return Err(StacksNodeError::from(BroadcastError::from(&json_response)));
+        }
+
         Ok(())
     }
 
@@ -658,7 +658,6 @@ impl StacksNode for NodeClient {
     }
 
     fn get_miners_list(&self, sender: &StacksAddress) -> Result<Vec<StacksAddress>, StacksNodeError> {
-        let mut miners: Vec<PrincipalData> = Vec::new();
         // input: no arguments
         // output: list(Principal)
         let mut miners:Vec<StacksAddress> = Vec::new();
@@ -683,6 +682,33 @@ impl StacksNode for NodeClient {
             ));
         }
         return Ok(miners);
+    }
+
+    fn get_waiting_list(&self, sender: &StacksAddress) -> Result<Vec<StacksAddress>, StacksNodeError> {
+        // input: no arguments
+        // output: list(Principal)
+        let mut waiting_list: Vec<StacksAddress> = Vec::new();
+        let function_name = "get-waiting-list";
+        let waiting_list_data_hex = self.call_read(sender, function_name, &[])?;
+        let waiting_list_data = ClarityValue::try_deserialize_hex_untyped(&waiting_list_data_hex)?;
+        if let ClarityValue::Sequence(SequenceData::List(waiting_list_clarity)) = waiting_list_data.clone() {
+            for waiting_user in waiting_list_clarity.data {
+                if let ClarityValue::Principal(waiting_user_address) = waiting_user {
+                    waiting_list.push(StacksAddress::from(waiting_user_address));
+                } else {
+                    return Err(StacksNodeError::MalformedClarityValue(
+                        function_name.to_string(),
+                        waiting_list_data
+                    ));
+                }
+            }
+        } else {
+            return Err(StacksNodeError::MalformedClarityValue(
+                function_name.to_string(),
+                waiting_list_data,
+            ));
+        }
+        return Ok(waiting_list);
     }
 }
 
@@ -925,6 +951,25 @@ mod tests {
         let result = h.join().unwrap().unwrap();
 
         assert_eq!(result, [StacksAddress::from_string("ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM").unwrap()]);
+    }
+
+    #[test]
+    fn get_waiting_list() {
+        let config = TestConfig::new();
+        let address = config.client.contract_address;
+
+        let h = spawn(move || config.client.get_waiting_list(
+            &address,
+        ));
+
+        write_response(
+            config.mock_server,
+            b"HTTP/1.1 200 OK\n\n{\"okay\":true,\"result\":\"0x0b00000000\"}"
+        );
+        let result = h.join().unwrap().unwrap();
+        info!("{result:?}");
+
+        assert_eq!(result, []);
     }
 
     fn write_response(mock_server: TcpListener, bytes: &[u8]) -> [u8; 1024] {

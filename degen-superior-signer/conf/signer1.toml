@@ -1,6 +1,6 @@
 mining_contract = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mining-pool"
 exchange_contract = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.bridge-contract"
-stacks_private_key = "7287ba251d44a4d3fd9276c88ce34c5c52a038955511cccaf77e61068649c17801"
+stacks_private_key = "eb92abc7cd7ab8d7590763d6aee37c60fd5bafa6048d4f0760a27dcded7d11c501"
 bitcoin_private_key = "1d799760009ca66cb0ad05a80e5b781deabf0550923fad7ad4417f61702f6353"
 stacks_node_rpc_url = "http://localhost:20443"
 bitcoin_node_rpc_url = "http://devnet:devnet@localhost:18443"

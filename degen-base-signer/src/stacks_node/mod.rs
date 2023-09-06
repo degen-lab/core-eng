@@ -74,6 +74,7 @@ pub trait StacksNode {
     fn is_auto_exchange(&self, sender: &StacksAddress) -> Result<bool, Error>;
     fn get_reward_info_for_block_height(&self, sender: &StacksAddress, block_height: u128) -> Result<(u128, PrincipalData), Error>;
     fn get_miners_list(&self, sender: &StacksAddress) -> Result<Vec<StacksAddress>, Error>;
+    fn get_waiting_list(&self, sender: &StacksAddress) -> Result<Vec<StacksAddress>, Error>;
 }
 
 pub type PegInOp = burn_ops::PegInOp;

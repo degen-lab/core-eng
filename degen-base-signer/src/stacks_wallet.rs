@@ -191,6 +191,7 @@ impl StacksWallet {
         Ok(tx)
     }
 
+    // TODO: degens - find if needed or delete
     pub fn vote_negative_remove_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
         let function_name = "vote-remove-join-request";
         let principal = Value::Principal(PrincipalData::from(miner_address));
@@ -220,33 +221,23 @@ impl StacksWallet {
     /// (ask-to-join (my-btc-address {hashbytes: (buff 20), version: (buff 1)}))
     pub fn ask_to_join(&self, nonce: u64, hashbytes_btc: Vec<u8>) -> Result<StacksTransaction, Error> {
         let function_name = "ask-to-join";
+
         // directly legacy address for the bitcoin private key provided
         let hashbytes = Value::Sequence(SequenceData::Buffer(BuffData {
             data: hashbytes_btc
         }));
-        let a = &hashbytes;
-        info!("{:?}", a);
         let version = Value::Sequence(SequenceData::Buffer(BuffData {
             data: vec![06]
         }));
+
         let btc_address = Value::Tuple(TupleData::from_data(vec![
             (ClarityName::from("hashbytes"), hashbytes),
             (ClarityName::from("version"), version)
-        ]).map_err(Error::from)?);// TODO: degens - Value::Tuple(TupleData::try_from((hashbytes, version))?);
+        ]).map_err(Error::from)?);
+        ;
         let function_args = vec![btc_address];
         let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
         Ok(tx)
-
-        // let principal = Value::Principal(address.to_account_principal());
-        // let key = Value::Sequence(SequenceData::Buffer(BuffData {
-        //     data: public_key.to_bytes_compressed(),
-        // }));
-        // let data = TupleData::from_data(vec![
-        //     (ClarityName::from("addr"), principal),
-        //     (ClarityName::from("key"), key),
-        // ])
-        //     .map_err(Error::from)?;
-        // let function_args = vec![data.into()];
     }
 }
 
