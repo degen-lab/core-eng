@@ -116,7 +116,7 @@ plan:
         - contract-publish:
             contract-name: mining-pool
             expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            cost: 484830
+            cost: 532050
             path: contracts/mining-pool.clar
             anchor-block-only: true
             clarity-version: 2
@@ -146,6 +146,13 @@ plan:
             expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             cost: 346620
             path: contracts/stacking-pool-test.clar
+            anchor-block-only: true
+            clarity-version: 2
+        - contract-publish:
+            contract-name: trait-sip-010-sbtc
+            expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            cost: 13630
+            path: contracts/trait-sip-010-sbtc.clar
             anchor-block-only: true
             clarity-version: 2
       epoch: "2.4"

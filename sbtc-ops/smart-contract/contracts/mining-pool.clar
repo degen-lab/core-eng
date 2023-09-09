@@ -1005,20 +1005,17 @@ claimer: (get-block-info? miner-address block-number)})
 (define-read-only (get-miners-list-positions (index1 uint) (index2 uint)) 
 (default-to (list ) (slice? (var-get miners-list) index1 index2)))
 
-(define-private (concat-us (b {hashbytes: (buff 32), version: (buff 1)}))
-  (let ((miner-bitcoin (unwrap-panic (get btc-address (map-get? btc-address {address: a})))))
-  (default-to (list ) (as-max-len? (append (list miner-bitcoin) b) u50)))
-  )
+;; (define-private (concat-us (b {hashbytes: (buff 32), version: (buff 1)}))
+;;   (let ((miner-bitcoin (unwrap-panic (get btc-address (map-get? btc-address {address: a})))))
+;;   (default-to (list ) (as-max-len? (append (list miner-bitcoin) b) u50))))
 
+;; write required
+;; (define-read-only (get-miners-list-bitcoin (index1 uint) (index2 uint))
+;;   ;; for each value starting from index1 to index2 -> map append value[map-bitcoin(address)] to list
+;;   (let ((current-list (default-to (list ) (slice? (var-get miners-list) index1 index2))))
+;;     (var-set temp-miners-bitcoin-lists (list ))
+;;     (map concat-us current-list (list ))))
 
-(define-read-only (get-miners-list-bitcoin (index1 uint) (index2 uint)) 
-  ;; for each value starting from index1 to index2 -> map append value[map-bitcoin(address)] to list
-  (let ((current-list (default-to (list ) (slice? (var-get miners-list) index1 index2))))
-    (var-set temp-miners-bitcoin-lists (list ))
-    (map concat-us current-list (list ))
-    
-  ))
-;; (map add-pending-miners-to-pool sequence)))
 
 (define-read-only (get-proposed-removal-list) 
 (var-get proposed-removal-list))
