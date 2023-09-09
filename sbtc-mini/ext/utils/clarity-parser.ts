@@ -103,7 +103,7 @@ export function extractTestAnnotationsAndCalls(contractSource: string) {
 }
 
 const callRegex =
-  /\n*^([ \t]{0,};;[ \t]{0,}@[\s\S]+?)\n[ \t]{0,}(\((?:[^()]*|\([^()]*\))*\))/gm;
+  /\n*^([ \t]{0,};;[ \t]{0,}@[\s\S]+?)\n[ \t]{0,}(\((?:[^()]*|\((?:[^()]*|\([^()]*\))*\))*\))/gm;
 
 /**
  * Takes a string and returns an array of objects containing
@@ -153,16 +153,19 @@ export function extractContractCalls(lastFunctionBody: string) {
   function splitArgs(argString: string): string[] {
     const splitArgs: string[] = [];
     let argStart = 0;
-    let brackets = 0;
+    let brackets = 0; // curly brackets
+    let rbrackets = 0; // round brackets
 
     for (let i = 0; i < argString.length; i++) {
       const char = argString[i];
 
       if (char === "{") brackets++;
       if (char === "}") brackets--;
+      if (char === "(") rbrackets++;
+      if (char === ")") rbrackets--
 
       const atLastChar = i === argString.length - 1;
-      if ((char === " " && brackets === 0) || atLastChar) {
+      if ((char === " " && (brackets === 0 && rbrackets === 0)) || atLastChar) {
         const newArg = argString.slice(argStart, i + (atLastChar ? 1 : 0));
         if (newArg.trim()) {
           splitArgs.push(newArg.trim());
@@ -202,25 +205,29 @@ export function extractContractCalls(lastFunctionBody: string) {
     const functionName = match[2];
     const argStrings = splitArgs(match[3]);
 
-    const args = argStrings.map((arg) => {
-      if (arg.startsWith("'")) {
-        return { type: "principal", value: `types.principal("${arg.slice(1)}")` };
-      } else if (arg.startsWith("u")) {
-        return { type: "uint", value: `types.uint(${arg.slice(1)})` };
-      } else if (arg.startsWith("{")) {
-        return { type: "tuple", value: parseTuple(arg) };
-      } else if (arg === "none") {
-        return { type: "none", value: "types.none()" };
-      } else {
-        return { type: "raw", value: `"${arg}"` };
-      }
-    });
+    const args = argStrings.map((arg) => parseArg(arg));
 
     return {
       contractName,
       functionName,
       args,
     };
+  }
+
+  function parseArg(arg:string): {type:string, value: string} {
+      if (arg.startsWith("'")) {
+        return { type: "principal", value: `types.principal("${arg.slice(1)}")` };
+      } else if (arg.startsWith("u")) {
+        return { type: "uint", value: `types.uint(${arg.slice(1)})` };
+      } else if (arg.startsWith("{")) {
+        return { type: "tuple", value: parseTuple(arg) };
+      } else if (arg.startsWith("(some ")) {
+        return { type: "some", value: `types.some(${parseArg(arg.substring(6, arg.length)).value})`}
+      } else if (arg === "none") {
+        return { type: "none", value: "types.none()" };
+      } else {
+        return { type: "raw", value: `"${arg}"` };
+      }
   }
 
   function extractCallInfo(statement: string) {

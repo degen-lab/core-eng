@@ -1,6 +1,6 @@
 use rand_core::OsRng;
-use wsts::bip340::test_helpers::{dkg, sign};
-use wsts::bip340::SchnorrProof;
+use wsts::taproot::test_helpers::{dkg, sign};
+use wsts::taproot::SchnorrProof;
 use wsts::v1::{self, SignatureAggregator};
 
 #[test]
@@ -16,7 +16,7 @@ fn pure_frost_test() {
     ];
 
     // DKG (Distributed Key Generation)
-    let A = dkg(&mut signers[..], &mut rng).unwrap();
+    let A = dkg(&mut signers[..], &mut rng, None).unwrap();
 
     // signing. Signers: 0 (parties: 0, 1) and 1 (parties: 2)
     let result = {
@@ -26,11 +26,11 @@ fn pure_frost_test() {
         const MSG: &[u8] = "It was many and many a year ago".as_bytes();
 
         // get nonces and shares
-        let (nonces, shares) = sign(MSG, &mut signers, &mut rng);
+        let (nonces, shares) = sign(MSG, &mut signers, &mut rng, None);
 
         SignatureAggregator::new(N, T, A.clone())
             .unwrap()
-            .sign(&MSG, &nonces, &shares)
+            .sign_taproot(&MSG, &nonces, &shares, None)
     };
 
     assert!(SchnorrProof::new(&result.unwrap()).is_ok());

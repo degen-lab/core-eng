@@ -1,18 +1,21 @@
-(define-constant err-burn-tx-already-processed (err u600))
+(define-constant err-burn-tx-already-processed (err u2000))
+(define-constant err-minimum-burnchain-confirmations-not-reached (err u2002))
 
-(define-constant err-peg-in-expired (err u500))
-(define-constant err-not-a-peg-wallet (err u501))
-(define-constant err-invalid-spending-pubkey (err u503))
-(define-constant err-peg-value-not-found (err u505))
-(define-constant err-missing-witness (err u506))
-(define-constant err-unlock-script-not-found-or-invalid (err u507))
+(define-constant err-deposit-expired (err u4000))
+(define-constant err-not-a-sbtc-wallet (err u4001))
+(define-constant err-invalid-spending-pubkey (err u4003))
+(define-constant err-peg-value-not-found (err u4005))
+(define-constant err-missing-witness (err u4006))
+(define-constant err-unlock-script-not-found-or-invalid (err u4007))
 
-(define-constant err-script-invalid-opcode (err u510))
-(define-constant err-script-invalid-version (err u511))
-(define-constant err-script-not-op-drop (err u512))
-(define-constant err-script-checksig-missing (err u513))
-(define-constant err-script-missing-pubkey (err u514))
-(define-constant err-script-invalid-principal (err u515))
+(define-constant err-script-invalid-opcode (err u4010))
+(define-constant err-script-invalid-version (err u4011))
+(define-constant err-script-not-op-drop (err u4012))
+(define-constant err-script-checksig-missing (err u4013))
+(define-constant err-script-missing-pubkey (err u4014))
+(define-constant err-script-invalid-principal (err u4015))
+(define-constant err-script-invalid-length (err u4016))
+
 
 (define-constant wallet-1 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5)
 (define-constant wallet-1-pubkey 0x03cd2cfdbd2ad9332828a7a13ef62cb999e063421c708e863a7ffed71fb61c88c9)
@@ -35,9 +38,10 @@
 
 (define-constant version-P2TR 0x06)
 
-(define-constant mock-peg-wallet { version: version-P2TR, hashbytes: 0xf855ca43402fb99cde0e3e634b175642561ff584fe76d1686630d8fd2ea93b36 })
+(define-constant mock-sbtc-wallet { version: version-P2TR, hashbytes: 0xf855ca43402fb99cde0e3e634b175642561ff584fe76d1686630d8fd2ea93b36 })
 (define-constant mock-peg-cycle u0)
 (define-constant mock-burnchain-height u3)
+
 
 ;;(define-constant mock-escrow-pubkey-1 0x6a30ab928118563dc27888d9af98d0138c32a8ed0efc9dcd0bf4cc4b503114de)
 (define-constant mock-escrow-address-1 "bcrt1pdgc2hy5prptrmsnc3rv6lxxszwxr928dpm7fmngt7nxyk5p3zn0qphrsks")
@@ -47,6 +51,10 @@
 (define-constant mock-tx-1 0x020000000001010052458c56fea00527237f73d6b7bb4cbaf1f5436c9d2673ae2e0164f4ad17d20000000000fdffffff010065cd1d00000000225120f855ca43402fb99cde0e3e634b175642561ff584fe76d1686630d8fd2ea93b360340000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f3c183c001a7321b74e2b6a7e949e6c4ad313035b1665095017007520f855ca43402fb99cde0e3e634b175642561ff584fe76d1686630d8fd2ea93b36ac41c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac074708f439116be919de13c6d3200d2305fcbdf5a9e7d2c079e85b427bb110e9000000000)
 (define-constant mock-wtxid-1 0x13d6ccd90dc236915d16dabe29fc02c00d4f5aad35577b43358a233d6e4620fd)
 (define-constant mock-txid-1 0xcd2662154e6d76b2b2b92e70c0cac3ccf534f9b74eb5b89819ec509083d00a50)
+
+;;0x582b1900f55dad47d575138e91321c441d174e20a43336780c352a0b556ecc8b
+;;  "txid": "0168ee41db8a4766efe02bba1ebc0de320bc1b0abb7304f5f104818a9dd721cf",
+;;  "hash": "13d6ccd90dc236915d16dabe29fc02c00d4f5aad35577b43358a233d6e4620fd",
 
 (define-constant mock-witness-index-1 u0)
 
@@ -59,11 +67,11 @@
 
 (define-constant mock-coinbase-witness-reserved-data 0x0000000000000000000000000000000000000000000000000000000000000000)
 
-(define-constant mock-coinbase-tx-1 0x020000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff23036f18250418b848644d65726d61696465722046545721010000686d20000000000000ffffffff02edfe250000000000160014c035e789d9efffa10aa92e93f48f29b8cfb224c20000000000000000266a24aa21a9ed8a3bb68aa55850328ea8233754a147464b8580c15460c4ffb928ab23cf0d198b0120000000000000000000000000000000000000000000000000000000000000000000000000)
+(define-constant mock-coinbase-tx-1 0x01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff1e0383a02519444d47426c6f636b636861696e309e3c092400000000000000ffffffff029e49250000000000160014b23716e183ba0949c55d6cac21a3e94176eed1120000000000000000266a24aa21a9ed8a3bb68aa55850328ea8233754a147464b8580c15460c4ffb928ab23cf0d198b0120000000000000000000000000000000000000000000000000000000000000000000000000)
 (define-constant mock-coinbase-wtxid-1 0x0000000000000000000000000000000000000000000000000000000000000000)
 
-(define-constant mock-block-header-1 0x000000000000000000000000000000000000000000000000000000000000000000000000d3dbd04a2912dd489751b19128a3ef428b9176512562eaf8ffa27a0223c8f215000000000000000000000000)
-(define-constant mock-block-header-hash-1-be 0x346993fc64b2a124a681111bb1f381e24dbef3cd362f0a40019238846c7ebf93)
+(define-constant mock-block-header-1 0x0000000000000000000000000000000000000000000000000000000000000000000000000b5c59d28b48942bba392cabfc2459c2842e6549e85bc2714b0ebce5c1c925d7000000000000000000000000)
+(define-constant mock-block-header-hash-1-be 0x6f028d4c95181966e53930fb034301081aaefed6f043ea1d86b329274a354b92)
 
 (define-read-only (get-sbtc-balance (who principal))
 	(unwrap! (contract-call? .sbtc-token get-balance who) u0)
@@ -78,11 +86,10 @@
 		;; Add the test contract to the protocol contract set.
 		(try! (prepare-add-test-to-protocol))
 		;; Add mock peg wallet adress to registry for test cycle
-		(try! (contract-call? .sbtc-registry insert-cycle-peg-wallet mock-peg-cycle mock-peg-wallet))
+		(try! (contract-call? .sbtc-registry insert-cycle-sbtc-wallet mock-peg-cycle mock-sbtc-wallet))
 		;; Mine a fake burnchain block that includes mock transactions
-		;;(try! (contract-call? .sbtc-testnet-debug-controller simulate-mine-solo-burnchain-block mock-burnchain-height (list mock-tx-1)))
-		;; (unwrap! (contract-call? .clarity-bitcoin mock-add-burnchain-block-header-hash mock-burnchain-height mock-block-header-hash-1-be) (err u112233))
-		(unwrap! (contract-call? .clarity-bitcoin mock-add-burnchain-block-header-hash mock-burnchain-height 0x56c235c25a7b8acee8fb606f6e0d493bd5e45848a90a9e4cc71a266627db5842) (err u112233))
+		(try! (contract-call? .sbtc-testnet-debug-controller simulate-mine-solo-burnchain-block mock-burnchain-height (list mock-tx-1)))
+		(unwrap! (contract-call? .clarity-bitcoin mock-add-burnchain-block-header-hash mock-burnchain-height mock-block-header-hash-1-be) (err u112233))
 		(ok true)
 	)
 )
@@ -96,7 +103,7 @@
 				recipient: 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
 				}
 			)
-			(result (unwrap! (contract-call? .sbtc-peg-in-processor verify-extract-unlock-script script) (err {expected: none, actual: none, msg: "Verification or extraction failed"})))
+			(result (unwrap! (contract-call? .sbtc-deposit-verifier verify-extract-unlock-script script) (err {expected: none, actual: none, msg: "Verification or extraction failed"})))
 		)
 		(asserts! (is-eq result expected) (err {expected: (some expected), actual: (some result), msg: "Result mismatch"}))
 		(ok true)
@@ -108,7 +115,7 @@
 			;; FF in place of sbtc opcode
 			(script 0x18ff001a7321b74e2b6a7e949e6c4ad313035b16650950170075200046422d30ec92c568e21be4b9579cfed8e71ba0702122b014755ae0e23e3563ac)
 			(expected err-script-invalid-opcode)
-			(result (contract-call? .sbtc-peg-in-processor verify-extract-unlock-script script))
+			(result (contract-call? .sbtc-deposit-verifier verify-extract-unlock-script script))
 		)
 		(asserts! (is-eq result expected) (err {expected: (some expected), actual: (some result), msg: "Result mismatch"}))
 		(ok true)
@@ -120,7 +127,7 @@
 			;; FF in place of payload version
 			(script 0x183cff1a7321b74e2b6a7e949e6c4ad313035b16650950170075200046422d30ec92c568e21be4b9579cfed8e71ba0702122b014755ae0e23e3563ac)
 			(expected err-script-invalid-version)
-			(result (contract-call? .sbtc-peg-in-processor verify-extract-unlock-script script))
+			(result (contract-call? .sbtc-deposit-verifier verify-extract-unlock-script script))
 		)
 		(asserts! (is-eq result expected) (err {expected: (some expected), actual: (some result), msg: "Result mismatch"}))
 		(ok true)
@@ -132,7 +139,7 @@
 			;; FF in place of OP_DROP
 			(script 0x183c001a7321b74e2b6a7e949e6c4ad313035b166509501700ff200046422d30ec92c568e21be4b9579cfed8e71ba0702122b014755ae0e23e3563ac)
 			(expected err-script-not-op-drop)
-			(result (contract-call? .sbtc-peg-in-processor verify-extract-unlock-script script))
+			(result (contract-call? .sbtc-deposit-verifier verify-extract-unlock-script script))
 		)
 		(asserts! (is-eq result expected) (err {expected: (some expected), actual: (some result), msg: "Result mismatch"}))
 		(ok true)
@@ -144,7 +151,7 @@
 			;; removed OP_CHECKSIG at the end (0xac)
 			(script 0x183c001a7321b74e2b6a7e949e6c4ad313035b16650950170075200046422d30ec92c568e21be4b9579cfed8e71ba0702122b014755ae0e23e3563)
 			(expected err-script-checksig-missing)
-			(result (contract-call? .sbtc-peg-in-processor verify-extract-unlock-script script))
+			(result (contract-call? .sbtc-deposit-verifier verify-extract-unlock-script script))
 		)
 		(asserts! (is-eq result expected) (err {expected: (some expected), actual: (some result), msg: "Result mismatch"}))
 		(ok true)
@@ -156,17 +163,19 @@
 			;; Invalid contract name (0xff)
 			(script 0x193c001a7321b74e2b6a7e949e6c4ad313035b166509501701ff75200046422d30ec92c568e21be4b9579cfed8e71ba0702122b014755ae0e23e3563ac)
 			(expected err-script-invalid-principal)
-			(result (contract-call? .sbtc-peg-in-processor verify-extract-unlock-script script))
+			(result (contract-call? .sbtc-deposit-verifier verify-extract-unlock-script script))
 		)
 		(asserts! (is-eq result expected) (err {expected: (some expected), actual: (some result), msg: "Result mismatch"}))
 		(ok true)
 	)
 )
 
-;; @name Test peg-in reveal proof (mints sBTC)
+;; @name Test deposit reveal proof (mints sBTC)
 ;; @mine-blocks-before 5
-(define-public (test-peg-in-reveal)
-	(let ((result (contract-call? .sbtc-peg-in-processor complete-peg-in
+(define-public (test-deposit-reveal)
+	(let (
+	(result
+	  (contract-call? .sbtc-deposit-verifier complete-deposit
 			mock-peg-cycle
 			mock-burnchain-height ;; burn-height
 			mock-tx-1 ;; tx
@@ -179,7 +188,9 @@
 			mock-witness-index-1
 			mock-coinbase-tx-1 ;; ctx
 			(list mock-txid-1) ;; cproof
-			)))
+			)
+	  )
+	)
 		(unwrap! result (err {msg: "Expected ok, got err", actual: (some result)}))
 		(asserts! (is-eq (get-sbtc-balance wallet-1) mock-value-tx-1) (err {msg: "User did not receive the expected sBTC", actual: none}))
 		(ok true)
@@ -188,8 +199,8 @@
 
 ;; @name Cannot submit the same proof twice
 ;; @mine-blocks-before 5
-(define-public (test-peg-in-reveal-no-repeat)
-	(let ((result (contract-call? .sbtc-peg-in-processor complete-peg-in
+(define-public (test-deposit-reveal-no-repeat)
+	(let ((result (contract-call? .sbtc-deposit-verifier complete-deposit
 			mock-peg-cycle
 			mock-burnchain-height ;; burn-height
 			mock-tx-1 ;; tx
@@ -203,7 +214,7 @@
 			mock-coinbase-tx-1 ;; ctx
 			(list mock-txid-1) ;; cproof
 			))
-		(result2 (contract-call? .sbtc-peg-in-processor complete-peg-in
+		(result2 (contract-call? .sbtc-deposit-verifier complete-deposit
 			mock-peg-cycle
 			mock-burnchain-height ;; burn-height
 			mock-tx-1 ;; tx
@@ -217,7 +228,7 @@
 			mock-coinbase-tx-1 ;; ctx
 			(list mock-txid-1) ;; cproof
 			))
-      )
+	  )
 		(unwrap! result (err {msg: "Expected ok, got err", actual: (some result)}))
 		(asserts! (is-eq (get-sbtc-balance wallet-1) mock-value-tx-1) (err {msg: "User did not receive the expected sBTC", actual: none}))
 		(asserts! (is-eq result2 err-burn-tx-already-processed) (err {msg: "Second call should have failed with err-burn-tx-already-processed", actual: (some result2)}))
@@ -225,3 +236,23 @@
 	)
 )
 
+;; @name cannot complete deposit if minimum burnchain confirmations not reached
+(define-public (test-minimum-burnchain-confirmations-not-reached)
+  (let ((result (contract-call? .sbtc-deposit-verifier complete-deposit
+		mock-peg-cycle
+		mock-burnchain-height
+		mock-tx-1
+		mock-block-header-1
+		u1
+		u1
+		(list mock-coinbase-wtxid-1)
+		mock-witness-root-hash-1-le
+		mock-coinbase-witness-reserved-data
+		mock-witness-index-1
+		mock-coinbase-tx-1
+		(list mock-txid-1)
+		)))
+	(asserts! (is-eq result err-minimum-burnchain-confirmations-not-reached) (err {msg: "Expected err-minimum-burnchain-confirmations-not-reached, got", actual: (some result)}))
+	(ok true)
+	)
+)

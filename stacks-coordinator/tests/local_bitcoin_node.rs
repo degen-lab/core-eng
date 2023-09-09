@@ -27,7 +27,7 @@ fn should_broadcast_transaction() {
     // Get a deposit escrow wallet public key i.e. address
     let mut signer = SignerHelper::default();
     let (public_commitments, deposit_wallet_public_key_point, deposit_wallet_public_key) =
-        signer.run_distributed_key_generation();
+        signer.run_distributed_key_generation(None);
 
     // Deposit into a stx address
     let stx_address: [u8; 32] = [0; 32];
@@ -91,6 +91,7 @@ fn should_broadcast_transaction() {
         &mut signer,
         &deposit_wallet_public_key_point,
         public_commitments,
+        None,
     );
 
     // Attempt to broadcast the withdrawal transaction

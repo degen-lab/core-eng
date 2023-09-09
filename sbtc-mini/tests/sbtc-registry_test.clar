@@ -1,24 +1,24 @@
 (define-constant mock-wtxid-1 0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f)
 
-(define-constant mock-peg-wallet-1 { version: 0x01, hashbytes: 0x0011223344556699001122334455669900112233445566990011223344556699 })
-(define-constant mock-peg-wallet-2 { version: 0x01, hashbytes: 0xaa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00 })
+(define-constant mock-sbtc-wallet-1 { version: 0x01, hashbytes: 0x0011223344556699001122334455669900112233445566990011223344556699 })
+(define-constant mock-sbtc-wallet-2 { version: 0x01, hashbytes: 0xaa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00aa00 })
 
 (define-constant mock-destination { version: 0x01, hashbytes: 0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff })
 (define-constant mock-unlock-script 0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0011223344556677)
 
 (define-constant burnchain-confirmations-required u4)
 
-(define-constant peg-out-state-requested 0x00)
-(define-constant peg-out-state-fulfilled 0x01)
-(define-constant peg-out-state-reclaimed 0x02)
+(define-constant withdrawal-state-requested 0x00)
+(define-constant withdrawal-state-fulfilled 0x01)
+(define-constant withdrawal-state-reclaimed 0x02)
 
-(define-constant err-burn-tx-already-processed (err u600))
-(define-constant err-peg-wallet-already-set (err u602))
-(define-constant err-minimum-burnchain-confirmations-not-reached (err u603))
-(define-constant err-not-settled-state (err u604))
-(define-constant err-invalid-txid-length (err u605))
-(define-constant err-unknown-peg-out-request (err u606))
-(define-constant err-peg-out-not-pending (err u607))
+(define-constant err-burn-tx-already-processed (err u2000))
+(define-constant err-sbtc-wallet-already-set (err u2001))
+(define-constant err-minimum-burnchain-confirmations-not-reached (err u2002))
+(define-constant err-not-settled-state (err u2003))
+(define-constant err-invalid-txid-length (err u2004))
+(define-constant err-unknown-withdrawal-request (err u2005))
+(define-constant err-withdrawal-not-pending (err u2006))
 
 (define-private (assert-eq (result (response bool uint)) (compare (response bool uint)) (message (string-ascii 100)))
 	(ok (asserts! (is-eq result compare) (err message)))
@@ -123,73 +123,73 @@
 
 ;; @name Cannot set a peg wallet for a cycle that already has one 
 ;; @mine-blocks-before 5
-(define-public (test-insert-duplicate-cycle-peg-wallet)
+(define-public (test-insert-duplicate-cycle-sbtc-wallet)
    (begin
-     (unwrap! (contract-call? .sbtc-registry insert-cycle-peg-wallet u1 mock-peg-wallet-1) (err "insert-cycle-peg-wallet should have succeeded"))
-     (unwrap! (contract-call? .sbtc-registry insert-cycle-peg-wallet u1 mock-peg-wallet-1) (ok true))
-     (err "Should have all failed with err-peg-wallet-already-set")
+     (unwrap! (contract-call? .sbtc-registry insert-cycle-sbtc-wallet u1 mock-sbtc-wallet-1) (err "insert-cycle-sbtc-wallet should have succeeded"))
+     (unwrap! (contract-call? .sbtc-registry insert-cycle-sbtc-wallet u1 mock-sbtc-wallet-1) (ok true))
+     (err "Should have all failed with err-sbtc-wallet-already-set")
    ) 
 )
 
 ;; @name Get peg wallet for cycle with none set returns none
 ;; @mine-blocks-before 5
-(define-public (test-get-none-cycle-peg-wallet)
+(define-public (test-get-none-cycle-sbtc-wallet)
   (begin
-    (unwrap! (contract-call? .sbtc-registry get-cycle-peg-wallet u10) (ok true))
+    (unwrap! (contract-call? .sbtc-registry get-cycle-sbtc-wallet u10) (ok true))
     (err "Peg wallet for cycle should be none")
   )
 )
 
 ;; @name Get cycle for peg wallet not set returns none
 ;; @mine-blocks-before 5
-(define-public (test-get-none-peg-wallet-cycle)
+(define-public (test-get-none-sbtc-wallet-cycle)
   (begin
-    (unwrap! (contract-call? .sbtc-registry get-peg-wallet-cycle mock-peg-wallet-2) (ok true))
+    (unwrap! (contract-call? .sbtc-registry get-sbtc-wallet-cycle mock-sbtc-wallet-2) (ok true))
     (err "Peg wallet cycle should be none")
   )
 )
 
-;; @name Cannot settle a peg-out request id that is not pending
+;; @name Cannot settle a withdrawal request id that is not pending
 ;; @mine-blocks-before 5
-(define-public (test-settle-non-pending-peg-out-request)
+(define-public (test-settle-non-pending-withdrawal-request)
   (begin
-    (unwrap! (contract-call? .sbtc-registry get-and-settle-pending-peg-out-request u10 peg-out-state-fulfilled) (ok true))
+    (unwrap! (contract-call? .sbtc-registry get-and-settle-pending-withdrawal-request u10 withdrawal-state-fulfilled) (ok true))
     (err "Should not be settle because req id was not pending")
   )
 )
 
-;; @name Fail to get a peg-out request that does not exist
+;; @name Fail to get a withdrawal request that does not exist
 ;; @mine-blocks-before 5
-(define-public (test-get-unknown-peg-out-request)
+(define-public (test-get-unknown-withdrawal-request)
   (begin
-    (unwrap! (contract-call? .sbtc-registry get-peg-out-request u10) (ok true))
-    (err "Peg-out request should be unknown")
+    (unwrap! (contract-call? .sbtc-registry get-withdrawal-request u10) (ok true))
+    (err "withdrawal request should be unknown")
   )
 )
 
-;; ;; @name Good increments of peg-out nonce
+;; ;; @name Good increments of withdrawal nonce
 ;; ;; @mine-blocks-before 5
-(define-public (test-peg-out-request-nonce-increment)
+(define-public (test-withdrawal-request-nonce-increment)
   (let (
-    (initial-nonce (contract-call? .sbtc-registry get-peg-out-nonce))
-    (nonce1 (unwrap! (contract-call? .sbtc-registry insert-peg-out-request u1 tx-sender u100 mock-destination mock-unlock-script) (err "insert-peg-out-request should have succeeded")))
-    (nonce2 (unwrap! (contract-call? .sbtc-registry insert-peg-out-request u1 tx-sender u100 mock-destination mock-unlock-script) (err "insert-peg-out-request should have succeeded")))
-    (nonce3 (unwrap! (contract-call? .sbtc-registry insert-peg-out-request u1 tx-sender u100 mock-destination mock-unlock-script) (err "insert-peg-out-request should have succeeded")))
+    (initial-nonce (contract-call? .sbtc-registry get-withdrawal-nonce))
+    (nonce1 (unwrap! (contract-call? .sbtc-registry insert-withdrawal-request u1 tx-sender u100 mock-destination mock-unlock-script) (err "insert-withdrawal-request should have succeeded")))
+    (nonce2 (unwrap! (contract-call? .sbtc-registry insert-withdrawal-request u1 tx-sender u100 mock-destination mock-unlock-script) (err "insert-withdrawal-request should have succeeded")))
+    (nonce3 (unwrap! (contract-call? .sbtc-registry insert-withdrawal-request u1 tx-sender u100 mock-destination mock-unlock-script) (err "insert-withdrawal-request should have succeeded")))
     )
-  (asserts! (is-eq nonce1 (+ initial-nonce u0)) (err "Peg-out request nonce for req1 should be u1"))
-  (asserts! (is-eq nonce2 (+ initial-nonce u1)) (err "Peg-out request nonce for req2 should be u2"))
-  (asserts! (is-eq nonce3 (+ initial-nonce u2)) (err "Peg-out request nonce for req3 should be u3"))
+  (asserts! (is-eq nonce1 (+ initial-nonce u0)) (err "withdrawal request nonce for req1 should be u1"))
+  (asserts! (is-eq nonce2 (+ initial-nonce u1)) (err "withdrawal request nonce for req2 should be u2"))
+  (asserts! (is-eq nonce3 (+ initial-nonce u2)) (err "withdrawal request nonce for req3 should be u3"))
   (ok true)
   )
 )
 
-;; @name peg-out-requests-pending is properly incremented
+;; @name withdrawal-requests-pending is properly incremented
 ;; @mine-blocks-before 5
-(define-public (test-peg-out-requests-pending)
+(define-public (test-withdrawal-requests-pending)
   (begin
-    (unwrap! (contract-call? .sbtc-registry insert-peg-out-request u1 tx-sender u100 mock-destination mock-unlock-script) (err "insert-peg-out-request should have succeeded"))
-    (unwrap! (contract-call? .sbtc-registry insert-peg-out-request u2 tx-sender u100 mock-destination mock-unlock-script) (err "insert-peg-out-request should have succeeded"))
-    (asserts! (is-eq (contract-call? .sbtc-registry get-pending-wallet-peg-outs) u2) (err "Peg-out pending number should be 2"))
+    (unwrap! (contract-call? .sbtc-registry insert-withdrawal-request u1 tx-sender u100 mock-destination mock-unlock-script) (err "insert-withdrawal-request should have succeeded"))
+    (unwrap! (contract-call? .sbtc-registry insert-withdrawal-request u2 tx-sender u100 mock-destination mock-unlock-script) (err "insert-withdrawal-request should have succeeded"))
+    (asserts! (is-eq (contract-call? .sbtc-registry get-pending-wallet-withdrawals) u2) (err "withdrawal pending number should be 2"))
     (ok true)
   )
 )

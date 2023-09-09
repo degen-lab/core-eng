@@ -1,0 +1,28 @@
+---
+id: 0
+name: Devnet deployment
+network: devnet
+stacks-node: "http://localhost:20443"
+bitcoin-node: "http://devnet:devnet@localhost:18443"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: ST000000000000000000002AMW42H.pox-3
+            expected-sender: ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+            method: allow-contract-caller
+            parameters:
+              - "'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-stacking-pool"
+              - none
+            cost: 10000
+        - contract-call:
+            contract-id: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-stacking-pool
+            expected-sender: ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+            method: signer-pre-register
+            parameters:
+              - u90000000000000
+              # btc address wallet_1 as user's pox address
+              - "{version: 0x00, hashbytes: 0x7321b74e2b6a7e949e6c4ad313035b1665095017}"
+            cost: 10000
+      epoch: "2.4"

@@ -88,8 +88,7 @@ fn deposit_psbt(
 
     let (mut partial_tx, _) = tx_builder.finish()?;
 
-    partial_tx.unsigned_tx.output =
-        utils::reorder_outputs(partial_tx.unsigned_tx.output.into_iter(), outputs);
+    partial_tx.unsigned_tx.output = utils::reorder_outputs(partial_tx.unsigned_tx.output, outputs);
 
     Ok(partial_tx)
 }

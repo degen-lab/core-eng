@@ -1,5 +1,5 @@
 (define-constant contract-deployer tx-sender)
-(define-constant err-unauthorised (err u401))
+(define-constant err-unauthorised (err u1000)) ;; The `is-protocol-caller` check failed.
 
 (define-map privileged-protocol-principals principal bool)
 ;; FIXME: Potential issue in that the contract-deployer can mess with the registry state

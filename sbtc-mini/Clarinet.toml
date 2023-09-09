@@ -35,18 +35,13 @@ path = 'tests/sbtc-controller_test.clar'
 clarity_version = 2
 epoch = 2.4
 
-[contracts.sbtc-peg-in-processor]
-path = 'contracts/sbtc-peg-in-processor.clar'
+[contracts.sbtc-deposit-verifier]
+path = 'contracts/sbtc-deposit-verifier.clar'
 clarity_version = 2
 epoch = 2.4
 
-[contracts.sbtc-peg-in-processor_test]
-path = 'tests/sbtc-peg-in-processor_test.clar'
-clarity_version = 2
-epoch = 2.4
-
-[contracts.sbtc-peg-out-processor]
-path = 'contracts/sbtc-peg-out-processor.clar'
+[contracts.sbtc-deposit-verifier_test]
+path = 'tests/sbtc-deposit-verifier_test.clar'
 clarity_version = 2
 epoch = 2.4
 
@@ -57,6 +52,36 @@ epoch = 2.4
 
 [contracts.sbtc-registry_test]
 path = 'tests/sbtc-registry_test.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-withdrawal-request-stx_test]
+path = 'tests/sbtc-withdrawal-request-stx_test.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-withdrawal-verifier_test]
+path = 'tests/sbtc-withdrawal-verifier_test.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-withdrawal-verifier]
+path = 'contracts/sbtc-withdrawal-verifier.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-withdrawal-request-btc]
+path = 'contracts/sbtc-withdrawal-request-btc.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-withdrawal-request-stx]
+path = 'contracts/sbtc-withdrawal-request-stx.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-withdrawal-request-reclaim]
+path = 'contracts/sbtc-withdrawal-request-reclaim.clar'
 clarity_version = 2
 epoch = 2.4
 
@@ -87,8 +112,8 @@ path = 'contracts/pox-3.clar'
 clarity_version = 2
 epoch = 2.4
 
-[contracts.sbtc-peg-transfer]
-path = 'contracts/sbtc-peg-transfer.clar'
+[contracts.sbtc-hand-off]
+path = 'contracts/sbtc-hand-off.clar'
 clarity_version = 2
 epoch = 2.4
 
@@ -107,13 +132,45 @@ path = 'tests/sbtc-stacking-pool_signer_test.clar'
 clarity_version = 2
 epoch = 2.4
 
+[contracts.sbtc-stacking-pool_as_protocol_test]
+path = 'tests/sbtc-stacking-pool_as_protocol_test.clar'
+clarity_version = 2
+epoch = 2.4
+
 [contracts.sbtc-stacking-pool_flow_test]
 path = 'tests/sbtc-stacking-pool_flow_test.clar'
 clarity_version = 2
 epoch = 2.4
 
+
+[contracts.sbtc-stacking-pool_allow_flow_test]
+path = 'tests/sbtc-stacking-pool_allow_flow_test.clar'
+clarity_version = 2
+epoch = 2.4
+
+
+[contracts.sbtc-stacking-pool_amonts_flow_test]
+path = 'tests/sbtc-stacking-pool_amounts_flow_test.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-stacking-pool_inactive_flow_test]
+path = 'tests/sbtc-stacking-pool_inactive_flow_test.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-stacking-pool_two_signers_flow_test]
+path = 'tests/sbtc-stacking-pool_two_signers_flow_test.clar'
+clarity_version = 2
+epoch = 2.4
+
 [contracts.sbtc-btc-tx-helper_test]
 path = 'tests/sbtc-btc-tx-helper_test.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.sbtc-hand-off_test]
+path = 'tests/sbtc-hand-off_test.clar'
 clarity_version = 2
 epoch = 2.4
 

@@ -235,7 +235,7 @@ impl PegQueue for SqlitePegQueue {
         let maybe_entry = self.get_single_entry_with_status(&Status::New)?;
 
         let Some(mut entry) = maybe_entry else {
-            return Ok(None)
+            return Ok(None);
         };
 
         entry.status = Status::Pending;

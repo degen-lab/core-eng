@@ -9,8 +9,8 @@
 ;; Add some safety to prevent accidental deployment on mainnet
 (asserts! (is-eq chain-id u2147483648) (err "This contract can only be deployed on testnet"))
 
-(define-constant err-not-debug-controller (err u900))
-(define-constant err-no-transactions (err u901))
+(define-constant err-not-debug-controller (err u9900)) ;; The caller is not a debug controller.
+(define-constant err-no-transactions (err u9901)) ;; No transactions to simulate mining a block with.
 
 (define-constant OP_RETURN 0x6a)
 
@@ -124,7 +124,7 @@
 )
 
 ;; TODO: Remove in the future. Putting this here temporarily.
-(define-read-only (generate-test-data-peg-out-commit-reveal)
+(define-read-only (generate-test-data-withdrawal-commit-reveal)
 	(let (
 		(mock-tx 0x020000000001010052458c56fea00527237f73d6b7bb4cbaf1f5436c9d2673ae2e0164f4ad17d20000000000fdffffff010065cd1d00000000225120f855ca43402fb99cde0e3e634b175642561ff584fe76d1686630d8fd2ea93b360340000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f3c183c001a7321b74e2b6a7e949e6c4ad313035b1665095017007520f855ca43402fb99cde0e3e634b175642561ff584fe76d1686630d8fd2ea93b36ac41c050929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac074708f439116be919de13c6d3200d2305fcbdf5a9e7d2c079e85b427bb110e9000000000)
 		(mock-txid-be 0x0168ee41db8a4766efe02bba1ebc0de320bc1b0abb7304f5f104818a9dd721cf)

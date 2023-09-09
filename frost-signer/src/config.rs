@@ -1,7 +1,7 @@
 use clap::Parser;
 use hashbrown::HashMap;
 use p256k1::{
-    ecdsa::{self, Error as ECDSAError},
+    ecdsa::{self, KeyError},
     scalar::{Error as ScalarError, Scalar},
 };
 use serde::Deserialize;
@@ -17,7 +17,7 @@ pub enum Error {
     #[error("{0}")]
     Toml(#[from] toml::de::Error),
     #[error("Invalid Public Key: {0}")]
-    InvalidPublicKey(ECDSAError),
+    InvalidPublicKey(KeyError),
     #[error("Failed to parse network_private_key: {0}")]
     InvalidPrivateKey(ScalarError),
     #[error("Invalid Key ID. Must specify Key IDs greater than 0.")]

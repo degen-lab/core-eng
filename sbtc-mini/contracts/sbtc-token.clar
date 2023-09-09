@@ -1,7 +1,6 @@
 (impl-trait 'SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sip-010-trait-ft-standard.sip-010-trait)
 
-(define-constant err-unauthorised (err u401))
-(define-constant err-not-token-owner (err u4))
+(define-constant err-not-token-owner (err u4)) ;; `tx-sender` or `contract-caller` tried to move a token it does not own.
 
 (define-fungible-token sbtc-token)
 (define-fungible-token sbtc-token-locked)
@@ -129,6 +128,10 @@
 
 (define-read-only (get-balance (who principal))
 	(ok (+ (ft-get-balance sbtc-token who) (ft-get-balance sbtc-token-locked who)))
+)
+
+(define-read-only (get-balance-available (who principal))
+	(ok (ft-get-balance sbtc-token who))
 )
 
 (define-read-only (get-balance-locked (who principal))

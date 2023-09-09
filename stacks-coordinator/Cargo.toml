@@ -29,7 +29,7 @@ backoff = { workspace = true }
 ureq.workspace = true
 url = { workspace = true }
 bdk.workspace = true
-hex.workspae = true
+hex.workspace = true
 
 [dev-dependencies]
 mockall = { workspace = true }

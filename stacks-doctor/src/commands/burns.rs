@@ -29,8 +29,18 @@ pub fn burns(network: Network, db_dir: &Path, args: &BlocksArgs) -> Result<()> {
     let mut height_fee_pairs: Vec<(u64, u64)> = vec![];
 
     while let Some(row) = rows.next().context("Could not get row")? {
-        let Some(height) = row.get::<_, Option<i64>>(0).context("Could not get block height from row")? else { continue };
-        let Some(fee) = row.get::<_, Option<i64>>(1).context("Could not get burn fee from row")? else { continue };
+        let Some(height) = row
+            .get::<_, Option<i64>>(0)
+            .context("Could not get block height from row")?
+        else {
+            continue;
+        };
+        let Some(fee) = row
+            .get::<_, Option<i64>>(1)
+            .context("Could not get burn fee from row")?
+        else {
+            continue;
+        };
 
         height_fee_pairs.push((height as u64, fee as u64));
     }

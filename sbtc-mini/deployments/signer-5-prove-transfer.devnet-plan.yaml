@@ -1,0 +1,27 @@
+---
+id: 0
+name: Devnet deployment
+network: devnet
+stacks-node: "http://localhost:20443"
+bitcoin-node: "http://devnet:devnet@localhost:18443"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-call:
+            contract-id: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-peg-transfer
+            expected-sender: ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5
+            method: relay-handoff-fulfillment
+            parameters:
+              - u2101
+              - 0x
+              - 0x
+              - u1
+              - u1
+              - "(list)"
+              - 0x
+              - 0x
+              - 0x
+              - "(list)"
+            cost: 10000
+      epoch: "2.4"

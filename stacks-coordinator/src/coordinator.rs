@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 use tracing::{debug, info, warn};
-use wsts::{bip340::SchnorrProof, common::Signature, field::Element, Point, Scalar};
+use wsts::{common::Signature, field::Element, taproot::SchnorrProof, Point, Scalar};
 
 use crate::bitcoin_wallet::BitcoinWallet;
 use crate::stacks_node::{self, Error as StacksNodeError};

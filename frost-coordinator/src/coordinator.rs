@@ -14,10 +14,10 @@ use hashbrown::HashSet;
 use p256k1::ecdsa::PublicKey;
 use tracing::{debug, info, warn};
 use wsts::{
-    bip340::{Error as Bip340Error, SchnorrProof},
     common::{PolyCommitment, PublicNonce, Signature, SignatureShare},
     compute,
     errors::AggregatorError,
+    taproot::{Error as TaprootError, SchnorrProof},
     v1, Point, Scalar,
 };
 
@@ -29,8 +29,8 @@ pub enum Error {
     NoAggregatePublicKey,
     #[error("Aggregator failed to sign: {0}")]
     Aggregator(#[from] AggregatorError),
-    #[error("BIP-340 error")]
-    Bip340(Bip340Error),
+    #[error("Taproot error")]
+    Taproot(TaprootError),
     #[error("SchnorrProof failed to verify")]
     SchnorrProofFailed,
     #[error("Operation timed out")]
@@ -372,7 +372,7 @@ where
 
         info!("Signature ({}, {})", sig.R, sig.z);
 
-        let proof = SchnorrProof::new(&sig).map_err(Error::Bip340)?;
+        let proof = SchnorrProof::new(&sig).map_err(Error::Taproot)?;
 
         info!("SchnorrProof ({}, {})", proof.r, proof.s);
 

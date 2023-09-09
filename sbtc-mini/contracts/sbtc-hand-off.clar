@@ -1,21 +1,21 @@
-;; sbtc-mini-peg-transfer
-;; peg-transfer processor for handing-off pegged-BTC from threshold-wallet (n) to newly-voted-for threshold-wallet (n+1)
+;; sbtc-mini-hand-off
+;; Hand-off verifier for handing-off pegged-BTC from threshold-wallet (n) to newly-voted-for threshold-wallet (n+1)
 
-;; Handoff Commit/Fund -> On BTC
+;; Hand-off Commit/Fund -> On BTC
 ;; 1. Stackers/signers in cycle/pool N create & fund a Taproot address/script with the current peg-balance that allows for two things:
 ;;   2. The transaction can be consumed (transferred from wallet n to n+1) a single signature from any of the stackers/signers in cycle/pool N+1
 ;;   3. The transaction is NOT picked up by the end of the transfer window in n & is reclaimed by the stackers/signers in cycle/pool N
 
-;; Handoff Reveal -> On STX
+;; Hand-off Reveal -> On STX
 ;; 2. The transaction is consumed & the pegged-BTC is succesfully transferred to the new threshold-wallet (n+1)
 ;;   2.a. Any observer can verify transfer with a call to .sbtc contracts with the Bitcoin txid of the transfer transaction
 ;;   This will mark a succesful transfer window & the current pool is moved to the audit/penalty window
 
-;; Handoff Reclaim/Penalty -> On BTC/STX
+;; Hand-off Reclaim/Penalty -> On BTC/STX
 ;; 3. The transaction is NOT consumed & the pegged-BTC is NOT transferred to the new threshold-wallet (n+1)
 
 ;; We don't know what that transaction type will look like: 1 input from previous address that goes to the next address
-;; What is the peg-wallet address look like? 
+;; What is the sbtc-wallet address look like?
 ;; How are / will the signers going to consolidate inputs/outputs?
 ;; Or is this done over many validations?
 ;; How do we keep track of the pegged-BTC balance?
@@ -28,21 +28,21 @@
 (define-constant penalty 0x04)
 (define-constant bad-peg-state 0x05)
 
-(define-constant err-current-pool-not-found (err u0))
-(define-constant err-current-threshold-wallet (err u1))
-(define-constant err-previous-pool-not-found (err u2))
-(define-constant err-pool-cycle (err u3))
-(define-constant err-previous-threshold-wallet (err u4))
-(define-constant err-parsing-btc-tx (err u5))
-(define-constant err-tx-not-mined (err u6))
-(define-constant err-not-in-transfer-window (err u7))
-(define-constant err-balance-already-transferred (err u8))
-(define-constant err-wrong-pubkey (err u9))
-(define-constant err-peg-balance-not-sufficient (err u10))
-(define-constant err-threshold-to-scriptpubkey (err u11))
+(define-constant err-current-pool-not-found (err u7000))
+(define-constant err-current-threshold-wallet (err u7001))
+(define-constant err-previous-pool-not-found (err u7002))
+(define-constant err-pool-cycle (err u7003))
+(define-constant err-previous-threshold-wallet (err u7004))
+(define-constant err-parsing-btc-tx (err u7005))
+(define-constant err-tx-not-mined (err u7006))
+(define-constant err-not-in-transfer-window (err u7007))
+(define-constant err-balance-already-transferred (err u7008))
+(define-constant err-wrong-pubkey (err u7009))
+(define-constant err-peg-balance-not-sufficient (err u7010))
+(define-constant err-threshold-to-scriptpubkey (err u7011))
 
 ;; Placeholder to make sbtc-stacking-pool happy
-(define-public (relay-handoff-fulfillment
+(define-public (relay-hand-off-fulfillment
     (burn-height uint)
 	(tx (buff 1024))
 	(header (buff 80))
@@ -55,7 +55,7 @@
 	(cproof (list 14 (buff 32))))
     (let 
         (
-            (current-cycle (contract-call? 'SP000000000000000000002Q6VF78.pox-2 current-pox-reward-cycle))
+            (current-cycle (contract-call? .pox-3 current-pox-reward-cycle))
             (current-pool-unwrapped (unwrap! (contract-call? .sbtc-stacking-pool get-current-cycle-pool) err-current-pool-not-found))
             (current-threshold-wallet (unwrap! (get threshold-wallet current-pool-unwrapped) err-current-threshold-wallet))
             (current-threshold-version (get version current-threshold-wallet))

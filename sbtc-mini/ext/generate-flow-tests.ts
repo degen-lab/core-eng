@@ -117,16 +117,29 @@ function generateBlocks(contractPrincipal: string, calls: FunctionBody) {
     // mine empty blocks
     const mineBlocksBefore =
       parseInt(callAnnotations["mine-blocks-before"] as string) || 0;
-    if (mineBlocksBefore > 1) {
+    const caller = callAnnotations["caller"] as string;
+    if (caller) {
       if (blockStarted) {
         code += `
-			  ]);
-			  block.receipts.map(({result}) => result.expectOk());
-			  `;
+        ]);
+        block.receipts.map(({result}) => result.expectOk());
+        `;
         blockStarted = false;
       }
-      code += `
-			  chain.mineEmptyBlock(${mineBlocksBefore - 1});`;
+      code += `callerAddress = accounts.get('${caller}')!.address;`;
+    }
+      if (mineBlocksBefore >= 1) {
+        if (blockStarted) {
+          code += `
+          ]);
+          block.receipts.map(({result}) => result.expectOk());
+          `;
+          blockStarted = false;
+        }
+      if (mineBlocksBefore > 1) {
+        code += `
+          chain.mineEmptyBlock(${mineBlocksBefore - 1});`;
+      }
     }
     // start a new block if necessary
     if (!blockStarted) {

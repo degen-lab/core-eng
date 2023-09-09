@@ -14,11 +14,15 @@
 (define-constant normal-transfer-period-len u100)
 (define-constant normal-penalty-period-len u100)
 
+(define-constant err-unauthorised (err u1000))
+(define-constant err-not-protocol-caller (err u6035))
+(define-constant err-stacking-permission-denied (err u6042))
+
 ;; @name Is protocol caller test (is not at first)
 (define-public (test-is-protocol-caller)
 	(let ((is-protocol-caller
 			(contract-call? .sbtc-stacking-pool is-protocol-caller)))
-		(asserts! (is-err is-protocol-caller) (err "Should not be a protocol caller at first"))
+		(asserts! (is-eq is-protocol-caller err-unauthorised) is-protocol-caller)
 		(ok true)
 	)
 )
@@ -92,7 +96,7 @@
 		(asserts! (is-eq start-voting-window u3700) (err start-voting-window))
 		(asserts! (is-eq start-transfer-window u4000) (err start-transfer-window))
 		(asserts! (is-eq next-cycle-burn-height u4200) (err next-cycle-burn-height))
-		(asserts! (is-eq burn-block-height u3701) (err burn-block-height))
+		(asserts! (is-eq burn-block-height u3702) (err burn-block-height))
 		(ok true)
 	)
 )
@@ -104,6 +108,36 @@
 			(contract-call? .sbtc-stacking-pool get-signer-in-cycle 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM u0)))
 		;; expect to return default values
 		(asserts! (is-eq u0 (get amount signer)) (err "Default signer must have amount u0"))
+		(ok true)
+	)
+)
+
+;; @name Update minimum pool amount can't be called by test contract
+(define-public (test-update-minimum-pool-amount)
+	(let ((result (contract-call? .sbtc-stacking-pool update-minimum-pool-amount-for-activation u100)))
+		(asserts! (is-err result) result)
+		(asserts! (is-eq result err-not-protocol-caller) result)
+		(ok true)
+	)
+)
+
+;; @name user can't set allowance through contracts
+;; @caller wallet_1
+(define-public (test-allow-contract-through-contract)
+	(let ((result (contract-call? .sbtc-stacking-pool allow-contract-caller 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-stacking-pool_test none)))
+        (asserts! (is-err result) result)
+		(asserts! (is-eq result err-stacking-permission-denied) result)
+		(ok true)
+	)
+)
+
+
+;; @name user can't disallow through contracts
+;; @caller wallet_1
+(define-public (test-disallow-contract-through-contract)
+	(let ((result (contract-call? .sbtc-stacking-pool disallow-contract-caller 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-stacking-pool_test)))
+        (asserts! (is-err result) result)
+		(asserts! (is-eq result err-stacking-permission-denied) result)
 		(ok true)
 	)
 )

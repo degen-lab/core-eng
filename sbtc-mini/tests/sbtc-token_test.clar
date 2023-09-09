@@ -3,7 +3,7 @@
 (define-constant test-mint-amount u10000000)
 (define-constant test-total-supply (* u2 test-mint-amount))
 
-(define-constant err-unauthorised (err u401))
+(define-constant err-unauthorised (err u1000))
 (define-constant err-not-token-owner (err u4))
 
 (define-private (assert-eq (result (response bool uint)) (compare (response bool uint)) (message (string-ascii 100)))
@@ -235,7 +235,7 @@
 ;; @name Cannot transfer someone else's tokens
 ;; @caller wallet_1
 (define-public (test-transfer-external)
-	(assert-eq (contract-call? .sbtc-token transfer u100 wallet-2 tx-sender none) (err u4) "Should have failed")
+	(assert-eq (contract-call? .sbtc-token transfer u100 wallet-2 tx-sender none) err-not-token-owner "Should have failed")
 )
 
 ;; @name Can get name

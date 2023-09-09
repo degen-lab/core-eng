@@ -30,9 +30,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        # TODO: https://github.com/Trust-Machines/stacks-sbtc/issues/599 Re-enable `--release`
-        #       option in matrix.
-        type: ['']
+        type: ['--release']
         # can't run on `windows-latests`
         os: [ubuntu-latest, buildjet-4vcpu-ubuntu-2204-arm, macos-latest]
     runs-on: ${{matrix.os}}

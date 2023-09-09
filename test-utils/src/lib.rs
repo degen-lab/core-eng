@@ -22,14 +22,18 @@ use std::{
 };
 use ureq::serde::Serialize;
 use url::Url;
-use wsts::bip340::test_helpers::{dkg, sign};
-use wsts::bip340::SchnorrProof;
-use wsts::common::PolyCommitment;
-use wsts::v1::{SignatureAggregator, Signer};
-use wsts::Point;
+use wsts::{
+    common::PolyCommitment,
+    compute::tweaked_public_key,
+    taproot::{
+        test_helpers::{dkg, sign},
+        SchnorrProof,
+    },
+    v1::{SignatureAggregator, Signer},
+    Point,
+};
 
-use ctrlc::Signal;
-use nix::sys::signal;
+use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;
 use ureq::serde_json::Value;
 use ureq::{self, json, post};
@@ -373,35 +377,44 @@ impl Default for SignerHelper {
 impl SignerHelper {
     pub fn run_distributed_key_generation(
         &mut self,
+        merkle_root: Option<[u8; 32]>,
     ) -> (Vec<PolyCommitment>, Point, bitcoin::PublicKey) {
         // DKG (Distributed Key Generation)
 
-        let public_commitments = dkg(&mut self.signers, &mut self.rng)
+        let public_commitments = dkg(&mut self.signers, &mut self.rng, merkle_root)
             .expect("Failed to run distributed key generation.");
         let group_public_key_point = public_commitments
             .iter()
             .fold(Point::new(), |s, poly| s + poly.A[0]);
+        let tweaked_group_public_key_point =
+            tweaked_public_key(&group_public_key_point, merkle_root);
 
         let group_public_key =
-            bitcoin::PublicKey::from_slice(group_public_key_point.compress().as_bytes())
+            bitcoin::PublicKey::from_slice(tweaked_group_public_key_point.compress().as_bytes())
                 .expect("Failed to create public key from DKG result.");
 
-        (public_commitments, group_public_key_point, group_public_key)
+        (
+            public_commitments,
+            tweaked_group_public_key_point,
+            group_public_key,
+        )
     }
 
     pub fn signing_round(
         &mut self,
         message: &[u8],
         public_commitments: Vec<PolyCommitment>,
+        merkle_root: Option<[u8; 32]>,
     ) -> SchnorrProof {
         // decide which signers will be used
         let mut signers = [self.signers[0].clone(), self.signers[1].clone()];
 
-        let (nonces, shares) = sign(message, &mut signers, &mut self.rng);
+        let (nonces, shares) = sign(message, &mut signers, &mut self.rng, merkle_root);
 
-        let sig = SignatureAggregator::new(self.total, self.threshold, public_commitments)
-            .expect("Failed to create signature aggregator.")
-            .sign(message, &nonces, &shares)
+        let mut agg = SignatureAggregator::new(self.total, self.threshold, public_commitments)
+            .expect("Failed to create signature aggregator.");
+        let sig = agg
+            .sign_taproot(message, &nonces, &shares, merkle_root)
             .expect("Failed to create signature.");
 
         SchnorrProof::new(&sig).expect("Failed to create Schnorr proof.")
@@ -456,6 +469,7 @@ pub fn sign_transaction_taproot(
     signer: &mut SignerHelper,
     group_public_key: &Point,
     public_commitments: Vec<PolyCommitment>,
+    merkle_root: Option<[u8; 32]>,
 ) -> String {
     let mut sighash_cache = bitcoin::util::sighash::SighashCache::new(&*tx);
     let taproot_sighash = sighash_cache
@@ -467,7 +481,7 @@ pub fn sign_transaction_taproot(
         .unwrap();
     let signing_payload = taproot_sighash.as_hash().to_vec();
     // signing. Signers: 0 (parties: 0, 1) and 1 (parties: 2)
-    let schnorr_proof = signer.signing_round(&signing_payload, public_commitments);
+    let schnorr_proof = signer.signing_round(&signing_payload, public_commitments, merkle_root);
     assert!(schnorr_proof.verify(&group_public_key.x(), &signing_payload));
 
     let mut frost_sig_bytes = vec![];

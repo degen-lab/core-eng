@@ -127,31 +127,34 @@ struct Cli {
     command: Command,
 }
 
-async fn init_pool(config_path: Option<String>) -> anyhow::Result<SqlitePool> {
-    let _ = dotenv::dotenv();
+async fn verify_config(pool: &SqlitePool, config_path: Option<String>) -> anyhow::Result<()> {
     let database_url = env::var("DATABASE_URL").ok();
     if database_url.is_none() && config_path.is_none() {
         return Err(anyhow::anyhow!(
             "No DATABASE_URL env variable set or config path provided"
         ));
     }
-    // Initialize the connection pool__
-    let pool = db::init_pool(env::var("DATABASE_URL").ok())
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to initialize database connection pool: {}", e))?;
     // If we have a config path, try to load the config from the file
     if let Some(path) = config_path {
-        dbg!(&path);
         let config = Config::from_path(path)
             .map_err(|e| anyhow::anyhow!("Failed to load config from file: {}", e))?;
-        db::config::update_config(&pool, &config).await?;
+        db::config::update_config(pool, &config).await?;
     } else {
-        db::config::get_config(&pool).await.map_err(|_| {
+        db::config::get_config(pool).await.map_err(|_| {
             anyhow::anyhow!(
                 "No configuration loaded in database. Must run with --config option set"
             )
         })?;
     }
+    Ok(())
+}
+
+async fn init_pool() -> anyhow::Result<SqlitePool> {
+    let _ = dotenv::dotenv();
+    // Initialize the connection pool__
+    let pool = db::init_pool(env::var("DATABASE_URL").ok())
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to initialize database connection pool: {}", e))?;
     Ok(pool)
 }
 
@@ -185,7 +188,7 @@ fn generate_docs(output: &Option<String>) -> anyhow::Result<()> {
 /// Run the Signer API server with a database of simulated data
 async fn run_simulator(args: SimulatorArgs) -> anyhow::Result<()> {
     // Initialize the connection pool
-    let pool = init_pool(None).await?;
+    let pool = init_pool().await?;
     let config = Config::from_secret_key(TEST_SECRET_KEY)
         .map_err(|e| anyhow::anyhow!("Failed to generate config from secret key: {}", e))?;
     db::config::update_config(&pool, &config)
@@ -209,7 +212,7 @@ async fn run_simulator(args: SimulatorArgs) -> anyhow::Result<()> {
 /// Serve the Swagger UI page on the provided address and port using the generated OpenAPI json doc
 async fn run_swagger(args: &SwaggerArgs) -> anyhow::Result<()> {
     // Initialize the connection pool
-    let pool = init_pool(None).await?;
+    let pool = init_pool().await?;
     // Configure where we host the doc in swagger-ui
     let path_buf = Path::new(&args.path);
     let config = Arc::new(SwaggerConfig::from(args.path.clone()));
@@ -287,8 +290,14 @@ async fn main() {
         Command::Simulator(args) => run_simulator(args).await,
         Command::Run(args) => {
             // Initialize the connection pool
-            match init_pool(args.config).await {
-                Ok(pool) => run(pool, args.server).await,
+            match init_pool().await {
+                Ok(pool) => {
+                    if let Err(e) = verify_config(&pool, args.config).await {
+                        println!("Error occurred running API server: {}", e);
+                        return;
+                    }
+                    run(pool, args.server).await
+                }
                 Err(e) => Err(e),
             }
         }

@@ -101,11 +101,13 @@ fn blog_post() {
 
 #[test]
 fn frost_btc() {
+    // Merkle root for taproot tweaks (null to prevent script spends)
+    let merkle_root = [0u8; 32];
     // Singer setup
     let mut signer = SignerHelper::default();
     // DKG (Distributed Key Generation)
     let (public_commitments, deposit_wallet_public_key_point, deposit_wallet_public_key) =
-        signer.run_distributed_key_generation();
+        signer.run_distributed_key_generation(Some(merkle_root));
 
     // bitcoind regtest
     let btcd = BitcoinProcess::new();
@@ -184,6 +186,7 @@ fn frost_btc() {
         &mut signer,
         &deposit_wallet_public_key_point,
         public_commitments,
+        Some(merkle_root),
     );
     println!(
         "withdrawal tx id {} outputs {:?}",

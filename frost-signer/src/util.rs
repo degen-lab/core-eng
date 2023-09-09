@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 pub const AES_GCM_NONCE_SIZE: usize = 12;
 
 /// Create a ECDSA public key from the passed string
-pub fn parse_public_key(public_key: &str) -> Result<ecdsa::PublicKey, ecdsa::Error> {
+pub fn parse_public_key(public_key: &str) -> Result<ecdsa::PublicKey, ecdsa::KeyError> {
     ecdsa::PublicKey::try_from(public_key)
 }
 

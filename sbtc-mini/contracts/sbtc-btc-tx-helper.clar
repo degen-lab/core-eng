@@ -77,23 +77,23 @@
 	(contract-call? .pox-3 current-pox-reward-cycle)
 )
 
-(define-read-only (hashbytes-to-scriptpubkey (peg-wallet { version: (buff 1), hashbytes: (buff 32) }))
+(define-read-only (hashbytes-to-scriptpubkey (sbtc-wallet { version: (buff 1), hashbytes: (buff 32) }))
 	(begin
-		(asserts! (is-some (index-of? supported-address-versions (get version peg-wallet))) none)
-		(some (concat (if (is-eq (get version peg-wallet) version-P2TR) OP_1 OP_0) (prepend-length (get hashbytes peg-wallet))))
+		(asserts! (is-some (index-of? supported-address-versions (get version sbtc-wallet))) none)
+		(some (concat (if (is-eq (get version sbtc-wallet) version-P2TR) OP_1 OP_0) (prepend-length (get hashbytes sbtc-wallet))))
 	)
 )
 
-(define-read-only (get-cycle-peg-wallet (cycle (optional uint)))
-	(contract-call? .sbtc-registry get-cycle-peg-wallet (default-to (current-reward-cycle) cycle))
+(define-read-only (get-cycle-sbtc-wallet (cycle (optional uint)))
+	(contract-call? .sbtc-registry get-cycle-sbtc-wallet (default-to (current-reward-cycle) cycle))
 )
 
-(define-read-only (get-peg-wallet-scriptpubkey (cycle (optional uint)))
-	(hashbytes-to-scriptpubkey (unwrap! (get-cycle-peg-wallet cycle)  none))
+(define-read-only (get-sbtc-wallet-scriptpubkey (cycle (optional uint)))
+	(hashbytes-to-scriptpubkey (unwrap! (get-cycle-sbtc-wallet cycle)  none))
 )
 
-(define-read-only (get-peg-wallet-hashbytes-scriptpubkey (cycle (optional uint)))
-	(let ((hashbytes (unwrap! (get-cycle-peg-wallet cycle) none)))
+(define-read-only (get-sbtc-wallet-hashbytes-scriptpubkey (cycle (optional uint)))
+	(let ((hashbytes (unwrap! (get-cycle-sbtc-wallet cycle) none)))
 		(some {
 		hashbytes: hashbytes,
 		scriptpubkey: (try! (hashbytes-to-scriptpubkey hashbytes))

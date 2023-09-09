@@ -2,15 +2,15 @@
 name: Risk issue
 about: Track Risk issues
 title: "[Risk]"
-labels: 'risk:high-impact,risk:medium-impact,risk:low-impact,risk:informational,risk:unknown-impact,risk:high-likelihood,risk:medium-likelihood,risk:low-likelihood,,risk:unknown-likelihood,unsolved,mitigated,wontfix,fixed,not-an-issue'
+labels: 'high-impact,medium-impact,low-impact,informational,unknown-impact,high-likelihood,medium-likelihood,low-likelihood,unknown-likelihood,unsolved,mitigated,wontfix,fixed,not-an-issue,risk'
 assignees: ''
 
 ---
 
-* <span style="text-decoration:underline;">Likelihood</span>: use issue labels for likelihood such as `high` / `medium` / `low`
-* <span style="text-decoration:underline;">Impact</span>: use issue labels for impact such as `high` / `medium` / `low` / `informational` / `unknown`
-* <span style="text-decoration:underline;">Status</span>: use issue label for status: `fixed` / `mitigated` / `unsolved` / `wontfix` / `not-an-issue`
-* <span style="text-decoration:underline;">Fix or mitigation updates</span>: Use issue comments for updates.
+* **Impact:** use issue labels for impact such as `high-impact` / `medium-impact` / `low-impact` / `informational` / `unknown-impact`
+* **Likelihood:** use issue labels for likelihood such as `high-likelihood` / `medium-likelihood` / `low-likelihood` / `unknown-likelihood`
+* **Status:** use issue label for status such as `fixed` / `mitigated` / `unsolved` / `wontfix` / `not-an-issue`
+* **Fix or mitigation updates:** Please write in the issue comments any updates.
 
 ## Short Description
 

@@ -399,8 +399,8 @@
                                  cycle-entry-total-ustx) })
             (ok (merge data { cycle: (+ u1 cycle)} )))))
 
-;; This method is called by the Stacks block processor directly in order to handle the contract state mutations
-;;  associated with an early unlock. This can only be invoked by the block processor: it is private, and no methods
+;; This method is called by the Stacks block verifier directly in order to handle the contract state mutations
+;;  associated with an early unlock. This can only be invoked by the block verifier: it is private, and no methods
 ;;  from this contract invoke it.
 (define-private (handle-unlock (user principal) (amount-locked uint) (cycle-to-unlock uint))
     (let ((user-stacking-state (unwrap-panic (map-get? stacking-state { stacker: user })))
