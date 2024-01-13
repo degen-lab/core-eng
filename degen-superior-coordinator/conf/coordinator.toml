@@ -1,0 +1,16 @@
+mining_contract = "ST02D2KP0630FS1BCJ7YM4TYMDH6NS9QKR0B57R3.mining-m3-testing-v3"
+exchange_contract = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.bridge-contract"
+stacks_private_key = "c2eae79ad466a0a98d64e24fc27d0a8eaf75891c9029d5f821a67743affa874201"
+stacks_node_rpc_url = "https://stacks-node-api.testnet.stacks.co/"
+bitcoin_node_rpc_url = "http://devnet:devnet@localhost:18443"
+bitcoin_private_key = "2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90"
+frost_dkg_round_id = 0
+transaction_fee = 2000
+# Insert the amount you want to send to script, in satoshi - 1 BTC = 100,000,000 SATS (if you want to fund the script each block, insert 0)
+amount_to_script = 4_000_000_000
+fee_to_script = 300
+fee_to_pox = 1000
+network = "testnet"
+http_relay_url = "http://localhost:9776"
+frost_state_file = "frost.state.bin"
+network_private_key = "9aSCCR6eirt1NAHwJtSz4HMwBHTyMo62SyPMvVDt5DQn"

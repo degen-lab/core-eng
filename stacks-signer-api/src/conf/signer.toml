@@ -1,5 +1,0 @@
-secret_key = "26F85CE8B2C635AD92F6148E4443FE415F512F3F29F44AB0E2CBDA819295BBD5"
-delegate_public_key = "025972a1f2532b44348501075075b31eb21c02eef276b91db99d30703f2081b773"
-delgator_public_keys = []
-auto_deny_addresses = []
-auto_approve_max_amount = 100_000

@@ -1,0 +1,53 @@
+M3 flow:
+
+When a signer runs his code:
+The signer makes his config, creating nodes, wallets, addresses, keys, fees etc.
+An infinite loop is made until the smart contract read-only call returns that the signer is a miner in pool (hence preventing him to run the signer code).
+We then check if the amount to send to the script that he chose in config is enough to cover at least 1 transaction.
+    - If the check fails, the code panics and informs him to choose a higher amount.
+Then we spawn a separate thread in order to continuously run some commands (auto-exchange, accept non-blacklisted users in pool) - every 5 minutes.
+The thread doesn't block the signer at all, so he continues to receive requests and send responses to coordinator.
+
+Coordinator:
+Stacks Coordinator -> Requests data about signers from Frost Coordinator
+Frost Coordinator -> Requests data about signers from signers
+
+Signers:
+Frost Signer -> Creates refund and unspendable scripts which are used in order to create a script address and taproot spend info
+Frost Signer -> Checks the amount required to send to pox for the current block
+Frost Signer -> Calls listunspent command on his script address to retreive the UTXOs
+Frost Signer -> Checks if the amount on his script is enough to cover the transaction
+    - if he has enough money, he then proceeds to create a response containing his script UTXO along with his stacks address
+    - if he doesn't, then:
+        - he runs a refund phase on his script, returning the money to him
+        - he then tries to send money to the script, then creating a response - the utxo field is a result containing either a valid utxo, or an error
+Frost Signer -> Constructs a response and sends it to Frost Coordinator
+
+Coordinator:
+Frost Coordinator -> Awaits the response from all signers, checking if it is the correct type, and puts the data in a vector
+Frost Coordinator -> Returns the signer's data to Stacks Coordinator
+Stacks Coordinator -> Checks if the UTXO is valid and not an error, the amount on the utxo is correct, and that the returned stacks addresses are correct
+    - if there is a bad actor, the transaction is canceled, notifying the signers that there is a bad actor
+    - if not, the transaction is created, signed and broadcasted
+
+Bad actor case:
+Stacks Coordinator -> Checks every address from bad actors:
+    - warns it if it has less than 2 warnings
+    - proposes it for removal and votes positive for removal if it has 2 warnings, adding it to a list of users to be voted out of pool
+Stacks Coordinator -> Sends the list of users to be voted out of pool to Frost Coordinator
+Frost Coordinator -> Sends a request to signers to vote out all users from the list
+Frost Signer -> Creates a separate thread, checking for each user:
+    - if the user is still in mining pool means he was't yet voted out
+    - if the user is proposed for removal (in order to vote only after the propose for removal call is made)
+    - if the above conditions are true, the user makes a call to vote positive for removal, no longer checking the voted address
+
+No bad actor case:
+Stacks Coordinator -> Creates the transaction containing signer's UTXOs as inputs, and the 2 PoX addresses + the rest of money back to each script as outputs
+Stacks Coordinator -> Sends a request to Frost Coordinator for signed transaction
+Frost Coordinator -> Iterates through each input, sending a request to signers to sign it, including the transaction in the request
+Frost Signer -> Checks if the outputs contain the 2 PoX addresses and the correct amount sent to them
+Frost Signer -> Each signer checks if his UTXO is contained in inputs, and if the script address is included in the outputs and has the correct amount back
+Frost Signer -> If any of the checks above fail, they don't sign the transaction and write a malicious coordinator log to a local file
+Frost Signer -> If the checks succeed, they sign the inputs and return them to Frost Coordinator
+Frost Coordinator -> Returns the signed transaction to Stacks Coordinator
+Stacks Coordinator -> Broadcasts the transaction

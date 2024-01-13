@@ -381,7 +381,7 @@ impl SignerHelper {
     ) -> (Vec<PolyCommitment>, Point, bitcoin::PublicKey) {
         // DKG (Distributed Key Generation)
 
-        let public_commitments = dkg(&mut self.signers, &mut self.rng, merkle_root)
+        let public_commitments = dkg(&mut self.signers, &mut self.rng)
             .expect("Failed to run distributed key generation.");
         let group_public_key_point = public_commitments
             .iter()
@@ -413,11 +413,9 @@ impl SignerHelper {
 
         let mut agg = SignatureAggregator::new(self.total, self.threshold, public_commitments)
             .expect("Failed to create signature aggregator.");
-        let sig = agg
-            .sign_taproot(message, &nonces, &shares, merkle_root)
-            .expect("Failed to create signature.");
 
-        SchnorrProof::new(&sig).expect("Failed to create Schnorr proof.")
+        agg.sign_taproot(message, &nonces, &shares, merkle_root)
+            .expect("Failed to create taproot schnorr proof.")
     }
 }
 

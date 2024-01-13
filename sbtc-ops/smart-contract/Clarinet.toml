@@ -1,0 +1,128 @@
+[project]
+name = 'DecentralizedStacksPools'
+description = 'DecentralizedStacksPools'
+authors = []
+telemetry = false
+cache_dir = '.cache'
+
+[[project.requirements]]
+contract_id = 'SP000000000000000000002Q6VF78.pox-2'
+
+[[project.requirements]]
+contract_id = 'ST000000000000000000002AMW42H.pox-2'
+
+[[project.requirements]]
+contract_id = 'ST000000000000000000002AMW42H.pox-3'
+[contracts.Wrapped-Bitcoin]
+path = 'contracts/Wrapped-Bitcoin.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.alex-vault-v1-1]
+path = 'contracts/alex-vault-v1-1.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.amm-swap-pool-v1-1]
+path = 'contracts/amm-swap-pool-v1-1.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.bridge-contract]
+path = 'contracts/bridge-contract.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.clarity-bitcoin]
+path = 'contracts/clarity-bitcoin.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.degen-bridge-testnet-v3]
+path = 'contracts/degen-bridge-testnet-v3.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.ft-trait]
+path = 'contracts/ft-trait.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.mining-pool]
+path = 'contracts/mining-pool.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.mining-pool-5-blocks]
+path = 'contracts/mining-pool-5-blocks.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.mining-pool-test]
+path = 'contracts/mining-pool-test.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.restricted-token-trait]
+path = 'contracts/restricted-token-trait.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.stacking-pool]
+path = 'contracts/stacking-pool.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.stacking-pool-test]
+path = 'contracts/stacking-pool-test.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.token-amm-swap-pool-v1-1]
+path = 'contracts/token-amm-swap-pool-v1-1.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.token-wbtc]
+path = 'contracts/token-wbtc.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.token-wstx]
+path = 'contracts/token-wstx.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.trait-flash-loan-user]
+path = 'contracts/trait-flash-loan-user.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.trait-ownable]
+path = 'contracts/trait-ownable.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.trait-semi-fungible]
+path = 'contracts/trait-semi-fungible.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.trait-sip-010]
+path = 'contracts/trait-sip-010.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.trait-sip-010-sbtc]
+path = 'contracts/trait-sip-010-sbtc.clar'
+clarity_version = 2
+epoch = 2.4
+
+[repl.analysis]
+passes = []
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false

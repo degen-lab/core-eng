@@ -1,0 +1,32 @@
+mining_contract = "ST02D2KP0630FS1BCJ7YM4TYMDH6NS9QKR0B57R3.mining-m3-testing-v3"
+exchange_contract = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.bridge-contract"
+stacks_private_key = "811ad2e8f9bafb837c6f7df8521d71a2782b19701715b511018eaa93c3ed84da01"
+bitcoin_private_key = "1d799760009ca66cb0ad05a80e5b781deabf0550923fad7ad4417f61702f6353"
+stacks_node_rpc_url = "https://stacks-node-api.testnet.stacks.co/"
+bitcoin_node_rpc_url = "http://devnet:devnet@localhost:18443"
+transaction_fee = 2000
+network = "testnet"
+http_relay_url = "http://localhost:9776"
+keys_threshold = 4
+# Insert the amount you want to send to script, in satoshi - 1 BTC = 100,000,000 SATS (if you want to fund the script each block, insert 0)
+amount_to_script = 0
+fee_to_script = 300
+fee_to_pox = 1000
+#frost_state_file = "frost.state.bin"
+#network_private_key = "GGJL5xL1o8U5TJNMtQiT8YK6sdYgpTrN1TZCeFrcYxeV"
+#signers =  [
+#    {public_key = "xvwd4f8L4oAmAXNhqMvQvbMiniCSeNH1rD9ZwCEEf7b6", key_ids = [1, 2]},
+#    {public_key = "cLuu4PSQLxi6bjFYGyTvyAFRUe3XfJL8mQ99Bd9A8mv9", key_ids = [3, 4]},
+#    {public_key = "gKCpZS42qdyVh9qQLtjbJYg8reEhjgyho6z6ghmLXZUx", key_ids = [5, 6]}
+#]
+#coordinator_public_key = "2A1tcY8RFby6pTNk8wQ3qGPCgWRXTL24yMwmcXiG7tKCZ"
+
+# We had these, which worked:
+frost_state_file = "frost.state.bin"
+network_private_key = "9aSCCR6eirt1NAHwJtSz4HMwBHTyMo62SyPMvVDt5DQn"
+signers =  [
+    {public_key = "22Rm48xUdpuTuva5gz9S7yDaaw9f8sjMcPSTHYVzPLNcj", key_ids = [1, 2]},
+    {public_key = "22Rm48xUdpuTuva5gz9S7yDaaw9f8sjMcPSTHYVzPLNcj", key_ids = [3, 4]},
+    {public_key = "22Rm48xUdpuTuva5gz9S7yDaaw9f8sjMcPSTHYVzPLNcj", key_ids = [5, 6]}
+]
+coordinator_public_key = "22Rm48xUdpuTuva5gz9S7yDaaw9f8sjMcPSTHYVzPLNcj"

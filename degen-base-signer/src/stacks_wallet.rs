@@ -1,0 +1,496 @@
+use crate::{
+    peg_wallet::{Error as PegWalletError, StacksWallet as StacksWalletTrait},
+    stacks_node::{PegInOp, PegOutRequestOp},
+    util_versioning::address_version,
+};
+use bitcoin::XOnlyPublicKey;
+use stackslib::{
+    chainstate::stacks::{
+        StacksTransaction, StacksTransactionSigner, TransactionAnchorMode, TransactionAuth,
+        TransactionContractCall, TransactionPayload, TransactionPostConditionMode,
+        TransactionSpendingCondition, TransactionVersion,
+    },
+    core::{CHAIN_ID_MAINNET, CHAIN_ID_TESTNET},
+    types::chainstate::{StacksAddress, StacksPrivateKey, StacksPublicKey},
+    vm::{
+        errors::RuntimeErrorType,
+        types::{ASCIIData, BuffData, SequenceData, StacksAddressExtensions, TupleData},
+        ClarityName, ContractName, Value,
+    },
+};
+use stackslib::vm::types::PrincipalData;
+use tracing::info;
+
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum Error {
+    ///Error due to invalid configuration values
+    #[error("{0}")]
+    ConfigError(String),
+    ///Error occured while signing a transaction
+    #[error("Failed to sign transaction: {0}")]
+    SigningError(String),
+    ///Error occurred due to a malformed op
+    #[error("{0}")]
+    MalformedOp(String),
+    ///Error occurred at Clarity runtime
+    #[error("Clarity runtime error ocurred: {0}")]
+    ClarityRuntimeError(#[from] RuntimeErrorType),
+    ///Blockstack error
+    #[error("Clarity runtime error ocurred: {0}")]
+    BlockstackError(#[from] stackslib::vm::errors::Error),
+}
+
+#[derive(Debug, Clone)]
+pub struct StacksWallet {
+    contract_address: StacksAddress,
+    contract_name: ContractName,
+    sender_key: StacksPrivateKey,
+    public_key: StacksPublicKey,
+    address: StacksAddress,
+    version: TransactionVersion,
+    fee: u64,
+}
+
+impl StacksWallet {
+    pub fn new(
+        contract_name: ContractName,
+        contract_address: StacksAddress,
+        sender_key: StacksPrivateKey,
+        address: StacksAddress,
+        version: TransactionVersion,
+        fee: u64,
+    ) -> Self {
+        let public_key = StacksPublicKey::from_private(&sender_key);
+        Self {
+            contract_address,
+            contract_name,
+            sender_key,
+            public_key,
+            address,
+            version,
+            fee,
+        }
+    }
+
+    fn build_transaction_signed(
+        &self,
+        function_name: impl Into<String>,
+        function_args: Vec<Value>,
+        nonce: u64,
+    ) -> Result<StacksTransaction, Error> {
+        // First build an unsigned transaction
+        let unsigned_tx = self.build_transaction_unsigned(function_name, function_args, nonce)?;
+
+        // Do the signing
+        let mut tx_signer = StacksTransactionSigner::new(&unsigned_tx);
+        tx_signer
+            .sign_origin(&self.sender_key)
+            .map_err(|e| Error::SigningError(e.to_string()))?;
+
+        // Retrieve the signed transaction from the signer
+        let signed_tx = tx_signer.get_tx().ok_or(Error::SigningError(
+            "Unable to retrieve signed transaction from the signer.".to_string(),
+        ))?;
+        Ok(signed_tx)
+    }
+
+    fn build_transaction_unsigned(
+        &self,
+        function_name: impl Into<String>,
+        function_args: Vec<Value>,
+        nonce: u64,
+    ) -> Result<StacksTransaction, Error> {
+        // First build the payload from the provided function and its arguments
+        let payload = self.build_transaction_payload(function_name, function_args)?;
+
+        // Next build the authorization from the provided sender key
+        let public_key = self.public_key();
+        let mut spending_condition = TransactionSpendingCondition::new_singlesig_p2pkh(*public_key)
+            .ok_or_else(|| {
+                Error::SigningError(
+                    "Failed to create transaction spending condition from provided sender_key."
+                        .to_string(),
+                )
+            })?;
+        spending_condition.set_nonce(nonce);
+        spending_condition.set_tx_fee(self.fee);
+        let auth = TransactionAuth::Standard(spending_condition);
+
+        // Viola! We have an unsigned transaction
+        let mut unsigned_tx = StacksTransaction::new(self.version, auth, payload);
+        unsigned_tx.anchor_mode = TransactionAnchorMode::Any;
+        unsigned_tx.post_condition_mode = TransactionPostConditionMode::Allow;
+        unsigned_tx.chain_id = if self.version == TransactionVersion::Testnet {
+            CHAIN_ID_TESTNET
+        } else {
+            CHAIN_ID_MAINNET
+        };
+
+        Ok(unsigned_tx)
+    }
+
+    fn build_transaction_payload(
+        &self,
+        function_name: impl Into<String>,
+        function_args: Vec<Value>,
+    ) -> Result<TransactionPayload, RuntimeErrorType> {
+        let function_name = ClarityName::try_from(function_name.into())?;
+        let payload = TransactionContractCall {
+            address: self.contract_address,
+            contract_name: self.contract_name.clone(),
+            function_name,
+            function_args,
+        };
+        Ok(payload.into())
+    }
+
+    /// COORDINATOR' FUNCTIONS
+    // TODO: degens - add the functions directly here or add them same way as peg-out/in for operation operability
+    pub fn propose_removal(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        // only coordinator can call this
+        let function_name = "propose-removal";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        // stacks wallet is self
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    pub fn warn_miner(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        // only coordinator can call this
+        let function_name = "warn-miner";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    /// MINERS' FUNCTIONS
+    pub fn vote_positive_join_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        let function_name = "vote-positive-join-request";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    // TODO: degens - find if needed or delete
+    pub fn vote_negative_join_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        let function_name = "vote-negative-join-request";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    pub fn vote_positive_remove_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        let function_name = "vote-positive-remove-request";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    // TODO: degens - find if needed or delete
+    pub fn vote_negative_remove_request(&self, nonce: u64, miner_address: StacksAddress) -> Result<StacksTransaction, Error> {
+        let function_name = "vote-negative-remove-request";
+        let principal = Value::Principal(PrincipalData::from(miner_address));
+        let function_args: Vec<Value> = vec![principal];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    /// PENDING MINERS' FUNCTIONS
+    pub fn add_pending_miners_to_pool(&self, nonce: u64) -> Result<StacksTransaction, Error> {
+        let function_name = "add-pending-miners-to-pool";
+        let function_args: Vec<Value> = vec![];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    /// WAITING MINERS' FUNCTIONS
+    pub fn call_try_enter(&self, nonce: u64) -> Result<StacksTransaction, Error> {
+        let function_name = "try-enter-pool";
+        let function_args: Vec<Value> = vec![];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    /// NORMAL USERS' FUNCTIONS
+    /// TODO: degens - check if works: hashbytes parsed and version hardcoded
+    /// (ask-to-join (my-btc-address {hashbytes: (buff 20), version: (buff 1)}))
+    pub fn ask_to_join(&self, nonce: u64, hashbytes_btc: Vec<u8>) -> Result<StacksTransaction, Error> {
+        let function_name = "ask-to-join";
+
+        // directly legacy address for the bitcoin private key provided
+        let hashbytes = Value::Sequence(SequenceData::Buffer(BuffData {
+            data: hashbytes_btc
+        }));
+        let version = Value::Sequence(SequenceData::Buffer(BuffData {
+            data: vec![06]
+        }));
+
+        let btc_address = Value::Tuple(TupleData::from_data(vec![
+            (ClarityName::from("hashbytes"), hashbytes),
+            (ClarityName::from("version"), version)
+        ]).map_err(Error::from)?);
+        ;
+        let function_args = vec![btc_address];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+}
+
+/// Build a StacksTransaction using the provided wallet and nonce
+pub trait BuildStacksTransaction {
+    fn build_transaction(
+        &self,
+        wallet: &StacksWallet,
+        nonce: u64,
+    ) -> Result<StacksTransaction, PegWalletError>;
+}
+
+impl BuildStacksTransaction for PegInOp {
+    fn build_transaction(
+        &self,
+        wallet: &StacksWallet,
+        nonce: u64,
+    ) -> Result<StacksTransaction, PegWalletError> {
+        let function_name = "mint!";
+
+        // Build the function arguments
+        let amount = Value::UInt(self.amount.into());
+        let principal = Value::from(self.recipient.clone());
+        //Note that this tx_id is only used to print info in the contract call.
+        let tx_id = Value::from(ASCIIData {
+            data: self.txid.to_string().as_bytes().to_vec(),
+        });
+        let function_args: Vec<Value> = vec![amount, principal, tx_id];
+        let tx = wallet.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+}
+
+impl BuildStacksTransaction for PegOutRequestOp {
+    fn build_transaction(
+        &self,
+        wallet: &StacksWallet,
+        nonce: u64,
+    ) -> Result<StacksTransaction, PegWalletError> {
+        let function_name = "burn!";
+
+        // Build the function arguments
+        let amount = Value::UInt(self.amount.into());
+        // Retrieve the stacks address to burn from
+        let address = self
+            .stx_address(address_version(&wallet.version))
+            .map_err(|_| {
+                Error::MalformedOp(
+                    "Failed to recover stx address from peg-out request op.".to_string(),
+                )
+            })?;
+        let principal_data = address.to_account_principal();
+        let principal = Value::Principal(principal_data);
+        //Note that this tx_id is only used to print info inside the contract call.
+        let tx_id = Value::from(ASCIIData {
+            data: self.txid.to_string().as_bytes().to_vec(),
+        });
+        let function_args: Vec<Value> = vec![amount, principal, tx_id];
+
+        let tx = wallet.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+}
+
+impl StacksWalletTrait for StacksWallet {
+    fn build_transaction<T: BuildStacksTransaction>(
+        &self,
+        op: &T,
+        nonce: u64,
+    ) -> Result<StacksTransaction, PegWalletError> {
+        op.build_transaction(self, nonce)
+    }
+    fn build_set_bitcoin_wallet_public_key_transaction(
+        &self,
+        public_key: &XOnlyPublicKey,
+        nonce: u64,
+    ) -> Result<StacksTransaction, PegWalletError> {
+        let function_name = "set-bitcoin-wallet-public-key";
+        // Build the function arguments
+        let key = Value::Sequence(SequenceData::Buffer(BuffData {
+            data: public_key.serialize().to_vec(),
+        }));
+        let function_args = vec![key];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    fn build_set_coordinator_data_transaction(
+        &self,
+        address: &StacksAddress,
+        public_key: &StacksPublicKey,
+        nonce: u64,
+    ) -> Result<StacksTransaction, PegWalletError> {
+        let function_name = "set-coordinator-data";
+        let principal = Value::Principal(address.to_account_principal());
+        let key = Value::Sequence(SequenceData::Buffer(BuffData {
+            data: public_key.to_bytes_compressed(),
+        }));
+        let data = TupleData::from_data(vec![
+            (ClarityName::from("addr"), principal),
+            (ClarityName::from("key"), key),
+        ])
+            .map_err(Error::from)?;
+        let function_args = vec![data.into()];
+        let tx = self.build_transaction_signed(function_name, function_args, nonce)?;
+        Ok(tx)
+    }
+
+    fn address(&self) -> &StacksAddress {
+        &self.address
+    }
+
+    fn public_key(&self) -> &StacksPublicKey {
+        &self.public_key
+    }
+
+    fn set_fee(&mut self, fee: u64) {
+        self.fee = fee;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        peg_wallet::StacksWallet as StacksWalletTrait,
+        stacks_wallet::StacksWallet,
+        util_versioning::{
+            address_version,
+            test::{build_peg_out_request_op, PRIVATE_KEY_HEX, PUBLIC_KEY_HEX},
+        },
+    };
+    use bitcoin::XOnlyPublicKey;
+    use stackslib::{
+        address::{AddressHashMode, C32_ADDRESS_VERSION_TESTNET_SINGLESIG},
+        burnchains::{Address, Txid},
+        chainstate::{
+            burn::operations::{PegInOp, PegOutRequestOp},
+            stacks::{address::PoxAddress, TransactionVersion},
+        },
+        types::chainstate::{
+            BurnchainHeaderHash, StacksAddress, StacksPrivateKey, StacksPublicKey,
+        },
+        util::{hash::Hash160, secp256k1::MessageSignature},
+        vm::{
+            types::{PrincipalData, StandardPrincipalData},
+            ContractName,
+        },
+    };
+    use rand::Rng;
+    use std::str::FromStr;
+
+    fn pox_address() -> PoxAddress {
+        PoxAddress::Standard(
+            StacksAddress::new(
+                C32_ADDRESS_VERSION_TESTNET_SINGLESIG,
+                Hash160::from_data(&rand::thread_rng().gen::<[u8; 20]>()),
+            ),
+            None,
+        )
+    }
+
+    fn stacks_wallet() -> StacksWallet {
+        let sender_key =
+            StacksPrivateKey::from_hex(PRIVATE_KEY_HEX).expect("Failed to parse private key");
+
+        let pk = StacksPublicKey::from_private(&sender_key);
+
+        let address = StacksAddress::from_public_keys(
+            address_version(&TransactionVersion::Testnet),
+            &AddressHashMode::SerializeP2PKH,
+            1,
+            &vec![pk],
+        )
+            .expect("Failed to create stacks address");
+        let contract_name = ContractName::from("mining-contract");
+
+        let contract_address =
+            StacksAddress::from_string("ST1SCEXE6PMGPAC6B4N5P2MDKX8V4GF9QDEBN8YF5")
+                .expect("Failed to parse contract address");
+        StacksWallet::new(
+            contract_name,
+            contract_address,
+            sender_key,
+            address,
+            TransactionVersion::Testnet,
+            10,
+        )
+    }
+    // TODO: degens - test accordingly
+
+    #[test]
+    fn build_mint_transaction_test() {
+        let p = PegInOp {
+            recipient: PrincipalData::Standard(StandardPrincipalData(0, [0u8; 20])),
+            peg_wallet_address: pox_address(),
+            amount: 55155,
+            memo: Vec::default(),
+            txid: Txid([0u8; 32]),
+            vtxindex: 0,
+            block_height: 0,
+            burn_header_hash: BurnchainHeaderHash([0; 32]),
+        };
+        let wallet = stacks_wallet();
+        let tx = wallet
+            .build_transaction(&p, 0)
+            .expect("Failed to construct mint transaction.");
+        tx.verify()
+            .expect("build_mint_transaction generated a transaction with an invalid signature");
+    }
+
+    #[test]
+    fn build_burn_transaction_test() {
+        let wallet = stacks_wallet();
+        let op = build_peg_out_request_op(PRIVATE_KEY_HEX, 10, 1, 3);
+        let tx = wallet
+            .build_transaction(&op, 0)
+            .expect("Failed to construct burn transaction.");
+        tx.verify()
+            .expect("build_burn_transaction generated a transaction with an invalid signature.");
+    }
+
+    #[test]
+    fn invalid_burn_op_test() {
+        let wallet = stacks_wallet();
+        // Construct an invalid peg-out request op.
+        let op = PegOutRequestOp {
+            amount: 1000,
+            recipient: pox_address(),
+            signature: MessageSignature([0x00; 65]),
+            peg_wallet_address: pox_address(),
+            fulfillment_fee: 0,
+            memo: vec![],
+            txid: Txid([0x04; 32]),
+            vtxindex: 0,
+            block_height: 0,
+            burn_header_hash: BurnchainHeaderHash([0x00; 32]),
+        };
+        assert_eq!(
+            wallet.build_transaction(&op, 0).err().unwrap().to_string(),
+            "Stacks Wallet Error: Failed to recover stx address from peg-out request op."
+        );
+    }
+
+    #[test]
+    fn build_set_bitcoin_wallet_public_key_transaction_test() {
+        let wallet = stacks_wallet();
+        let xonly_pubkey = XOnlyPublicKey::from_str(PUBLIC_KEY_HEX).unwrap();
+
+        let tx = wallet
+            .build_set_bitcoin_wallet_public_key_transaction(&xonly_pubkey, 0)
+            .expect("Failed to construct a set btc address transaction.");
+        tx.verify().expect(
+            "build_set_btc_address_transaction generated a transaction with an invalid signature.",
+        );
+    }
+}

@@ -14,7 +14,7 @@ Documentation: https://trust-machines.github.io/stacks-sbtc
 ## Projects
 
 - [relay-server](./relay-server/) is a simple HTTP relay server.
-- [stacks-signer-api](./stacks-signer-api) is an API server for interacting with a Stacks signer binary.
+- [stacks-signer-api](utils/stacks-signer-api) is an API server for interacting with a Stacks signer binary.
 
 ## Prerequisites
 

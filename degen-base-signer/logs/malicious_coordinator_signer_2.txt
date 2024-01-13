@@ -1,0 +1,495 @@
+Date and time: "11-10-2023 - 17:49:34"
+Block height: 720
+Transaction {
+    version: 2,
+    lock_time: PackedLockTime(
+        100,
+    ),
+    input: [
+        TxIn {
+            previous_output: OutPoint {
+                txid: 3e3f94d02c3ddbd04d1725501fbb17c1be4bb2bbd99a91fc7e1d799240993fef,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 44b74a9cf1be66698a6ee70251d91b5d3e17da100af17743ae14ef56227081a8,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: cccd2b96aba999e3155d6684bb3941359adbcb58dcf70cc0e48be8bf1011257e,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+    ],
+    output: [
+        TxOut {
+            value: 2756666767,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 4c5563d0186d987b70e9598039af4afbd8aa1f8b9684226ac416e77d21768982),
+        },
+        TxOut {
+            value: 2756666767,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 a5d1e9fb38ad8678b3b76c73e8f2315ae3f08c02523644ddcbc0d2c93261e998),
+        },
+        TxOut {
+            value: 2756666767,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 ea899a5ed2ef9d3180ac505da90b1a227f30c0095b8968d4b39525a638f5ae6b),
+        },
+        TxOut {
+            value: 1865000100,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 bb1745a455bfecbbbedefc0ad93b3c6146e653af8521d2bcf4e6f814ae64efcc),
+        },
+        TxOut {
+            value: 1865000100,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 6c3acc5483681f06ee58da7c5d7b39ced53269821d527df9a4cef0c9e20f32dd),
+        },
+    ],
+}
+
+============================================
+
+Date and time: "17-10-2023 - 19:11:12"
+Cause: "The transaction did not contain the correct PoX addresses!"
+Block height: 622
+Transaction {
+    version: 2,
+    lock_time: PackedLockTime(
+        100,
+    ),
+    input: [
+        TxIn {
+            previous_output: OutPoint {
+                txid: af2be73279b6f04331451f445935b283648d57e6002d95e48b6a12230b1ba175,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 056314ffea8e3c2ee12e07f7bc5c7430e8c745f2154ee4891ee92e2fa75f3b60,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 5d23b06cddedeb17120ee4c0055632ecda83a432ebcf01c71f0dde618769e686,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+    ],
+    output: [
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 ea899a5ed2ef9d3180ac505da90b1a227f30c0095b8968d4b39525a638f5ae6b),
+        },
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 4c5563d0186d987b70e9598039af4afbd8aa1f8b9684226ac416e77d21768982),
+        },
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 a5d1e9fb38ad8678b3b76c73e8f2315ae3f08c02523644ddcbc0d2c93261e998),
+        },
+    ],
+}
+
+============================================
+
+Date and time: "17-10-2023 - 19:29:21"
+Cause: "The transaction did not contain the correct amount!"
+Block height: 622
+Transaction {
+    version: 2,
+    lock_time: PackedLockTime(
+        100,
+    ),
+    input: [
+        TxIn {
+            previous_output: OutPoint {
+                txid: af2be73279b6f04331451f445935b283648d57e6002d95e48b6a12230b1ba175,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 056314ffea8e3c2ee12e07f7bc5c7430e8c745f2154ee4891ee92e2fa75f3b60,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 5d23b06cddedeb17120ee4c0055632ecda83a432ebcf01c71f0dde618769e686,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+    ],
+    output: [
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 ea899a5ed2ef9d3180ac505da90b1a227f30c0095b8968d4b39525a638f5ae6b),
+        },
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 4c5563d0186d987b70e9598039af4afbd8aa1f8b9684226ac416e77d21768982),
+        },
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 a5d1e9fb38ad8678b3b76c73e8f2315ae3f08c02523644ddcbc0d2c93261e998),
+        },
+        TxOut {
+            value: 1864999900,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 bb1745a455bfecbbbedefc0ad93b3c6146e653af8521d2bcf4e6f814ae64efcc),
+        },
+        TxOut {
+            value: 1864999900,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 6c3acc5483681f06ee58da7c5d7b39ced53269821d527df9a4cef0c9e20f32dd),
+        },
+    ],
+}
+
+============================================
+
+Date and time: "17-10-2023 - 19:30:12"
+Cause: "Could not find a good output back to your script in the transaction!"
+Block height: 622
+Transaction {
+    version: 2,
+    lock_time: PackedLockTime(
+        100,
+    ),
+    input: [
+        TxIn {
+            previous_output: OutPoint {
+                txid: 5d23b06cddedeb17120ee4c0055632ecda83a432ebcf01c71f0dde618769e686,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: af2be73279b6f04331451f445935b283648d57e6002d95e48b6a12230b1ba175,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 056314ffea8e3c2ee12e07f7bc5c7430e8c745f2154ee4891ee92e2fa75f3b60,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+    ],
+    output: [
+        TxOut {
+            value: 2756665934,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 a5d1e9fb38ad8678b3b76c73e8f2315ae3f08c02523644ddcbc0d2c93261e998),
+        },
+        TxOut {
+            value: 2756665934,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 ea899a5ed2ef9d3180ac505da90b1a227f30c0095b8968d4b39525a638f5ae6b),
+        },
+        TxOut {
+            value: 2756665934,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 4c5563d0186d987b70e9598039af4afbd8aa1f8b9684226ac416e77d21768982),
+        },
+        TxOut {
+            value: 1865000000,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 bb1745a455bfecbbbedefc0ad93b3c6146e653af8521d2bcf4e6f814ae64efcc),
+        },
+        TxOut {
+            value: 1865000000,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 6c3acc5483681f06ee58da7c5d7b39ced53269821d527df9a4cef0c9e20f32dd),
+        },
+    ],
+}
+
+============================================
+
+Date and time: "17-10-2023 - 19:32:36"
+Cause: "Could not find your script's UTXO as input in the transaction!"
+Block height: 622
+Transaction {
+    version: 2,
+    lock_time: PackedLockTime(
+        100,
+    ),
+    input: [
+        TxIn {
+            previous_output: OutPoint {
+                txid: 056314ffea8e3c2ee12e07f7bc5c7430e8c745f2154ee4891ee92e2fa75f3b60,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 056314ffea8e3c2ee12e07f7bc5c7430e8c745f2154ee4891ee92e2fa75f3b60,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 056314ffea8e3c2ee12e07f7bc5c7430e8c745f2154ee4891ee92e2fa75f3b60,
+                vout: 0,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+    ],
+    output: [
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 4c5563d0186d987b70e9598039af4afbd8aa1f8b9684226ac416e77d21768982),
+        },
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 a5d1e9fb38ad8678b3b76c73e8f2315ae3f08c02523644ddcbc0d2c93261e998),
+        },
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 ea899a5ed2ef9d3180ac505da90b1a227f30c0095b8968d4b39525a638f5ae6b),
+        },
+        TxOut {
+            value: 1865000000,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 bb1745a455bfecbbbedefc0ad93b3c6146e653af8521d2bcf4e6f814ae64efcc),
+        },
+        TxOut {
+            value: 1865000000,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 6c3acc5483681f06ee58da7c5d7b39ced53269821d527df9a4cef0c9e20f32dd),
+        },
+    ],
+}
+
+============================================
+
+Date and time: "17-10-2023 - 19:42:45"
+Cause: "Could not find your script's UTXO as input in the transaction!"
+Block height: 622
+Transaction {
+    version: 2,
+    lock_time: PackedLockTime(
+        100,
+    ),
+    input: [
+        TxIn {
+            previous_output: OutPoint {
+                txid: 5d23b06cddedeb17120ee4c0055632ecda83a432ebcf01c71f0dde618769e686,
+                vout: 1,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: 056314ffea8e3c2ee12e07f7bc5c7430e8c745f2154ee4891ee92e2fa75f3b60,
+                vout: 1,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+        TxIn {
+            previous_output: OutPoint {
+                txid: af2be73279b6f04331451f445935b283648d57e6002d95e48b6a12230b1ba175,
+                vout: 1,
+            },
+            script_sig: Script(),
+            sequence: Sequence(
+                2150694911,
+            ),
+            witness: Witness {
+                content: [],
+                witness_elements: 0,
+                last: 0,
+                second_to_last: 0,
+            },
+        },
+    ],
+    output: [
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 a5d1e9fb38ad8678b3b76c73e8f2315ae3f08c02523644ddcbc0d2c93261e998),
+        },
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 4c5563d0186d987b70e9598039af4afbd8aa1f8b9684226ac416e77d21768982),
+        },
+        TxOut {
+            value: 2756666034,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 ea899a5ed2ef9d3180ac505da90b1a227f30c0095b8968d4b39525a638f5ae6b),
+        },
+        TxOut {
+            value: 1865000000,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 bb1745a455bfecbbbedefc0ad93b3c6146e653af8521d2bcf4e6f814ae64efcc),
+        },
+        TxOut {
+            value: 1865000000,
+            script_pubkey: Script(OP_PUSHNUM_1 OP_PUSHBYTES_32 6c3acc5483681f06ee58da7c5d7b39ced53269821d527df9a4cef0c9e20f32dd),
+        },
+    ],
+}
+
+============================================
+
